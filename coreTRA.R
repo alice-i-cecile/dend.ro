@@ -215,10 +215,17 @@ rescaleCV <- function (cv, ci.u=NULL, ci.l=NULL){
   }
 }
 
-pad_cv <- function(cv, tra, na.value=0){
+pad_cv <- function(cv, tra, multiplicative){
+  
+  if (multiplicative){
+    na.value <- 0
+  } else {
+    na.value <- 1
+  }
+  
   new_cv <- list(NULL, NULL, NULL)
   
-  compare_names <- function (names_cv, names_tra){
+  compare_names <- function (names_cv, names_tra, dim){
     overlap_Q <- length(intersect(names_cv, names_tra[[1]]))
     overlap_F <- length(intersect(names_cv, names_tra[[2]]))
     overlap_A <- length(intersect(names_cv, names_tra[[3]]))
@@ -227,13 +234,18 @@ pad_cv <- function(cv, tra, na.value=0){
     if (overlap_Q==length(names_cv)){return (2)}
     if (overlap_Q==length(names_cv)){return (3)}
     
-    best <- c(1,2,3)[which.max(c(overlap_Q, overlap_F, overlap_A))]
+    if ((overlap_Q != overlap_F) & (overlap_Q!= overlap_A) & (overlap_F!= overlap_A)){
+      best <- which.max(c(overlap_Q, overlap_F, overlap_A))
+    } else {
+      best <- dim
+    }
+        
     return (best)
   }    
   
   # Match vectors to appropriate dimensions
   for(i in 1:length(cv)){
-    new_cv[[compare_names(names(cv[[i]]), dimnames(tra))]] <- cv[[i]]
+    new_cv[[compare_names(names(cv[[i]]), dimnames(tra), i)]] <- cv[[i]]
   }
   
   # Pad empty CV with zeros / null values

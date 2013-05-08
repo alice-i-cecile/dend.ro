@@ -81,20 +81,20 @@ base_synth_TRA <- function (cv_Q, cv_F, cv_A, births, deaths, sdlog=0){
   for (i in 1:length(rwl)){
     # Find years the tree was alive
     living_years <- c_years >= births[i] & c_years <= deaths[i]
-    
+        
     # Set all values outside of living years to NA
+    # Living years have a base value of 1
     rwl[!living_years, i] <- NA    
     
   }
-  
+    
   # Convert to a TRA
   tra <- rwl.to.tra(rwl)
-  
+    
   # Truncate the CV according to the values actually observed
-  cv_Q <- cv_Q[dimnames(tra)[[1]]]
   cv_F <- cv_F[dimnames(tra)[[2]]]
   cv_A <- cv_A[dimnames(tra)[[3]]]
-  
+    
   # Scale the TRA according to the CV
   tra <- sweep(tra, 1, cv_Q, "*")
   tra <- sweep(tra, 2, cv_F, "*")

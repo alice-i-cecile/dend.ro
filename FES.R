@@ -2,172 +2,6 @@
 library(foreach)
 library(gam)
 
-# Tree ring tables ####
-
-# Convert a tree ring array to a table suitable for use in lm () type functions
-tra.to.table <- function (tra){
-  
-  full <- !is.na(tra)
-  values <- tra[full]
-  ind_pos <- which(full, arr.ind=T)
-  
-  
-  Q_pos <- dimnames(full)[[1]][ind_pos[,1]]
-  F_pos <- dimnames(full)[[2]][ind_pos[,2]]
-  A_pos <- dimnames(full)[[3]][ind_pos[,3]]
-  
-  df <- data.frame(G=values, Q.cv=Q_pos, F.cv=F_pos, A.cv=A_pos)
-    
-  return (df)
-}
-
-# Formula construction ####
-make_gam_formula <- function (incQ, incF, incA){
-  dep.str <- "G"
-  ind.str <- "0"
-  
-  if(incQ){
-    ind.str <- paste(ind.str, "Q.cv", sep="+")
-  }
-  if(incF){
-    ind.str <- paste(ind.str, "F.cv", sep="+")
-  }
-  if(incA){
-    # Change smoothing terms here
-    ind.str <- paste(ind.str, "lo(A.num, span=span, degree=degree)", sep="+")
-  }
-  
-  # Combine the two sides of the formula
-  formula.str <- paste(dep.str, ind.str, sep="~")
-  
-  return (formula.str)
-}
-
-make_lm_formula <- function (incQ, incF, incA){
-  dep.str <- "G"
-  ind.str <- "0"
-  
-  if(incQ){
-    ind.str <- paste(ind.str, "Q.cv", sep="+")
-  }
-  if(incF){
-    ind.str <- paste(ind.str, "F.cv", sep="+")
-  }
-  if(incA){
-    ind.str <- paste(ind.str, "A.cv", sep="+")
-  }
-  
-  # Combine the two sides of the formula
-  formula.str <- paste(dep.str, ind.str, sep="~")
-  
-  return (formula.str)
-}
-
-make_gnm_formula  <- function(incQ, incF, incA){
-  # Determine formula desired
-  dep.str <- "G"
-  
-  # Combine the independent variables    
-  vars.str <- ""
-  
-  if(incQ){
-    vars.str <- paste(vars.str, "Q.cv", sep=",")
-  }
-  if(incF){
-    vars.str <- paste(vars.str, "F.cv", sep=",")
-  }
-  if(incA){
-    vars.str <- paste(vars.str, "A.cv", sep=",")
-  }
-  
-  # Remove leading symbol
-  vars.str <- substr(vars.str, 2, nchar(vars.str))
-  
-  # Add in the Mult() term and set the offset to 0
-  ind.str <- paste("Mult(", vars.str, ")+0", sep="")
-  
-  # Combine the two sides of the formula
-  formula.str <- paste(dep.str, ind.str, sep="~")
-  
-  return (formula.str)
-}
-
-# Extracting info from a model fit ####
-extract_cv <- function (growth_model, model_type){
-  model_class <- class(growth_model)
-  
-  if (model_type=="gam"){
-    cv <- extract_cv_gam(growth_model)
-  } else if (model_type=="gnm"){
-    cv <- extract_cv_gnm(growth_model)
-  } else if (model_type=="lm"){
-    cv <- extract_cv_lm(growth_model)
-  }
-             
-  return (cv)
-
-}
-
-extract_cv_lm <- function (growth_model){
-  coeff <- dummy.coef(growth_model)
-  Q.cv <- coeff$Q.cv
-  F.cv <- coeff$F.cv
-  A.cv <- coeff$A.cv
-  
-  cv <- list("Q"=Q.cv, "F"=F.cv, "A"=A.cv)
-  
-  return (cv)
-}
-
-extract_cv_nlme <- function (growth_model){
-  coeff <- coef(growth_model)
-  
-  names(coeff) <- gsub("Mult.*)\\.", "", names(coeff))
-  Q.cv <- coeff[grep("Q.cv", names(coeff))]
-  F.cv <- coeff[grep("F.cv", names(coeff))]
-  A.cv <- coeff[grep("A.cv", names(coeff))]
-  
-  names(Q.cv) <- substr(names(Q.cv), 5, nchar(names(Q.cv)))
-  names(F.cv) <- substr(names(F.cv), 5, nchar(names(F.cv)))
-  names(A.cv) <- substr(names(A.cv), 5, nchar(names(A.cv)))
-  
-  cv <- list("Q"=Q.cv, "F"=F.cv, "A"=A.cv)
-  
-  return (cv)
-  
-}
-
-extract_cv_gam <- function (growth_model){  
-  # Extract the linear components, Q and F
-  coeff <- dummy.coef(growth_model)
-  Q.cv <- coeff$Q.cv
-  F.cv <- coeff$F.cv
-  
-  # Cross reference with original data table
-  tab.tra <- growth_model$data
-  smooth_fit <- growth_model$smooth
-  
-  unique_levels <- unique(tab.tra$A.num)
-  indices <- unlist(foreach(i=unique_levels) %do% {match(i, tab.tra$A.num)})
-  
-  A.cv <- smooth_fit[indices]
-  names(A.cv) <- unique_levels
-  
-  cv <- list("Q"=Q.cv, "F"=F.cv, "A"=A.cv)
-    
-  return (cv)
-}
-
-extract_se <- function (growth_model){
-  predicted_se <- predict(growth_model, se.fit=T, type="terms")[[1]]
-  
-  tab.tra <- growth_model$model
-  
-  se <- lapply(1:ncol(predicted_se), cross_ref_model_terms, predicted_terms=predicted_se, model=tab.tra)
-  
-  return(se)
-}
-
 # Core regression function ####
 
 # Perform factor regression standardization on a tree ring array
@@ -266,16 +100,16 @@ standardize_fes <- function (tra, incQ=T, incF=T, incA=T, multiplicative=T, corr
   
   
   # Extract the coefficients found
-  cv <- extract_cv(growth_model, model_type)
-  cv <- pad_cv (cv, tra)  
-  cv <- sort_cv(cv, tra)
+  cv <- extract_cv (growth_model, model_type)
+  cv <- pad_cv (cv, tra, multiplicative)  
+  cv <- sort_cv (cv, tra)
         
   print("Canonical vectors and standard errors of estimate extracted.")
   
   if (multiplicative){
     # Untransform the canonical vectors
-    foo <- lapply(cv, length)>0    
-    cv[foo] <- lapply(cv[foo], exp) 
+    full_cv <- lapply(cv, length)>0    
+    cv[full_cv] <- lapply(cv[full_cv], exp) 
   }
   
   # Scale the canonical vectors and confidence intervals
@@ -317,4 +151,170 @@ standardize_fes <- function (tra, incQ=T, incF=T, incA=T, multiplicative=T, corr
   output <- list("cv"=cv, "RSE"=sd.epsilon, "fit"=fit, "model"=growth_model)
   
   return (output)
+}
+
+# Tree ring tables ####
+
+# Convert a tree ring array to a table suitable for use in lm () type functions
+tra.to.table <- function (tra){
+  
+  full <- !is.na(tra)
+  values <- tra[full]
+  ind_pos <- which(full, arr.ind=T)
+  
+  
+  Q_pos <- dimnames(full)[[1]][ind_pos[,1]]
+  F_pos <- dimnames(full)[[2]][ind_pos[,2]]
+  A_pos <- dimnames(full)[[3]][ind_pos[,3]]
+  
+  df <- data.frame(G=values, Q.cv=Q_pos, F.cv=F_pos, A.cv=A_pos)
+  
+  return (df)
+}
+
+# Formula construction ####
+make_gam_formula <- function (incQ, incF, incA){
+  dep.str <- "G"
+  ind.str <- "0"
+  
+  if(incQ){
+    ind.str <- paste(ind.str, "Q.cv", sep="+")
+  }
+  if(incF){
+    ind.str <- paste(ind.str, "F.cv", sep="+")
+  }
+  if(incA){
+    # Change smoothing terms here
+    ind.str <- paste(ind.str, "lo(A.num, span=span, degree=degree)", sep="+")
+  }
+  
+  # Combine the two sides of the formula
+  formula.str <- paste(dep.str, ind.str, sep="~")
+  
+  return (formula.str)
+}
+
+make_lm_formula <- function (incQ, incF, incA){
+  dep.str <- "G"
+  ind.str <- "0"
+  
+  if(incQ){
+    ind.str <- paste(ind.str, "Q.cv", sep="+")
+  }
+  if(incF){
+    ind.str <- paste(ind.str, "F.cv", sep="+")
+  }
+  if(incA){
+    ind.str <- paste(ind.str, "A.cv", sep="+")
+  }
+  
+  # Combine the two sides of the formula
+  formula.str <- paste(dep.str, ind.str, sep="~")
+  
+  return (formula.str)
+}
+
+make_gnm_formula  <- function(incQ, incF, incA){
+  # Determine formula desired
+  dep.str <- "G"
+  
+  # Combine the independent variables    
+  vars.str <- ""
+  
+  if(incQ){
+    vars.str <- paste(vars.str, "Q.cv", sep=",")
+  }
+  if(incF){
+    vars.str <- paste(vars.str, "F.cv", sep=",")
+  }
+  if(incA){
+    vars.str <- paste(vars.str, "A.cv", sep=",")
+  }
+  
+  # Remove leading symbol
+  vars.str <- substr(vars.str, 2, nchar(vars.str))
+  
+  # Add in the Mult() term and set the offset to 0
+  ind.str <- paste("Mult(", vars.str, ")+0", sep="")
+  
+  # Combine the two sides of the formula
+  formula.str <- paste(dep.str, ind.str, sep="~")
+  
+  return (formula.str)
+}
+
+# Extracting info from a model fit ####
+extract_cv <- function (growth_model, model_type){
+  model_class <- class(growth_model)
+  
+  if (model_type=="gam"){
+    cv <- extract_cv_gam(growth_model)
+  } else if (model_type=="gnm"){
+    cv <- extract_cv_gnm(growth_model)
+  } else if (model_type=="lm"){
+    cv <- extract_cv_lm(growth_model)
+  }
+  
+  return (cv)
+  
+}
+
+extract_cv_lm <- function (growth_model){
+  coeff <- dummy.coef(growth_model)
+  Q.cv <- coeff$Q.cv
+  F.cv <- coeff$F.cv
+  A.cv <- coeff$A.cv
+  
+  cv <- list("Q"=Q.cv, "F"=F.cv, "A"=A.cv)
+  
+  return (cv)
+}
+
+extract_cv_gnm <- function (growth_model){
+  coeff <- coef(growth_model)
+  
+  names(coeff) <- gsub("Mult.*)\\.", "", names(coeff))
+  Q.cv <- coeff[grep("Q.cv", names(coeff))]
+  F.cv <- coeff[grep("F.cv", names(coeff))]
+  A.cv <- coeff[grep("A.cv", names(coeff))]
+  
+  names(Q.cv) <- substr(names(Q.cv), 5, nchar(names(Q.cv)))
+  names(F.cv) <- substr(names(F.cv), 5, nchar(names(F.cv)))
+  names(A.cv) <- substr(names(A.cv), 5, nchar(names(A.cv)))
+  
+  cv <- list("Q"=Q.cv, "F"=F.cv, "A"=A.cv)
+  
+  return (cv)
+  
+}
+
+extract_cv_gam <- function (growth_model){  
+  # Extract the linear components, Q and F
+  coeff <- dummy.coef(growth_model)
+  Q.cv <- coeff$Q.cv
+  F.cv <- coeff$F.cv
+  
+  # Cross reference with original data table
+  tab.tra <- growth_model$data
+  smooth_fit <- growth_model$smooth
+  
+  unique_levels <- unique(tab.tra$A.num)
+  indices <- unlist(foreach(i=unique_levels) %do% {match(i, tab.tra$A.num)})
+  
+  A.cv <- smooth_fit[indices]
+  names(A.cv) <- unique_levels
+  
+  cv <- list("Q"=Q.cv, "F"=F.cv, "A"=A.cv)
+  
+  return (cv)
+}
+
+extract_se <- function (growth_model){
+  predicted_se <- predict(growth_model, se.fit=T, type="terms")[[1]]
+  
+  tab.tra <- growth_model$model
+  
+  se <- lapply(1:ncol(predicted_se), cross_ref_model_terms, predicted_terms=predicted_se, model=tab.tra)
+  
+  return(se)
 }
