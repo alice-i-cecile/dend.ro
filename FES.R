@@ -284,6 +284,11 @@ extract_cv_gnm <- function (growth_model){
   
   cv <- list("Q"=Q.cv, "F"=F.cv, "A"=A.cv)
   
+  # gnm function returns the negative coefficients in ~50% of the cases as they are also a least squares solution
+  # Force the positive solution
+  
+  cv <- lapply(cv, abs)
+  
   return (cv)
   
 }
