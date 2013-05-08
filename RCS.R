@@ -24,7 +24,13 @@ removeCV <- function (tra, cv, factor.dim, FUN="/"){
 
 # Regional curve standardization ####
 standardize_rcs <- function (tra, factor_order=c(3,2), meanType="arithmetic") {
-  cv <- list()
+  if (meanType=="arithmetic"){
+    multiplicative <- FALSE
+  } else {
+    multiplicative <- TRUE
+  }
+  
+  cv <- list(Q=NULL, F=NULL, A=NULL)
   
   # Estimate the effects one at a time
   for (effect in factor_order){
@@ -37,7 +43,7 @@ standardize_rcs <- function (tra, factor_order=c(3,2), meanType="arithmetic") {
   }
   
   # Fill in dummy values for effects not estimated
-  cv <- pad_cv(cv, tra, na.value=1)
+  cv <- pad_cv(cv, tra, multiplicative)
 
   # Make sure effects are in the right order
   cv <- sort_cv(cv, tra)
@@ -47,8 +53,7 @@ standardize_rcs <- function (tra, factor_order=c(3,2), meanType="arithmetic") {
   
   names (cv) <- c("Q","F","A")
   
-  return (list(cv=cv))
-  
+  return (list(cv=cv))  
 }
 
 # Signal-free regional curve standardization ####
