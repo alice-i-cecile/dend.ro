@@ -217,45 +217,28 @@ rescaleCV <- function (cv, ci.u=NULL, ci.l=NULL){
 
 pad_cv <- function(cv, tra, multiplicative){
   
+  # Set the value to fill dummy coefficients with
   if (multiplicative){
     na.value <- 0
   } else {
     na.value <- 1
   }
   
-  new_cv <- list(NULL, NULL, NULL)
+  # Initialize dummy cv lists
+  new_cv <- list(Q=NA, F=NA, A=NA)
   
-  compare_names <- function (names_cv, names_tra, dim){
-    overlap_Q <- length(intersect(names_cv, names_tra[[1]]))
-    overlap_F <- length(intersect(names_cv, names_tra[[2]]))
-    overlap_A <- length(intersect(names_cv, names_tra[[3]]))
-    
-    if (overlap_Q==length(names_cv)){return (1)}
-    if (overlap_Q==length(names_cv)){return (2)}
-    if (overlap_Q==length(names_cv)){return (3)}
-    
-    if ((overlap_Q != overlap_F) & (overlap_Q!= overlap_A) & (overlap_F!= overlap_A)){
-      best <- which.max(c(overlap_Q, overlap_F, overlap_A))
+  # Fill empty values  
+  for(i in c("Q", "F", "A")){
+    if (length(cv[[i]] > 0)){
+      new_cv[[i]] <- cv[[i]]
     } else {
-      best <- dim
-    }
-        
-    return (best)
-  }    
-  
-  # Match vectors to appropriate dimensions
-  for(i in 1:length(cv)){
-    new_cv[[compare_names(names(cv[[i]]), dimnames(tra), i)]] <- cv[[i]]
-  }
-  
-  # Pad empty CV with zeros / null values
-  for (j in 1:3){
-    if (length(new_cv[[j]])==0){
-      new_cv[[j]] <- rep.int(na.value, dim(tra)[j])
-      names(new_cv[[j]]) <- dimnames(tra)[[j]]
+      tra_dim <- which(c("Q", "F", "A")==i)
+      
+      new_cv[[i]] <- rep.int(na.value, dim(tra)[tra_dim])
+      names(new_cv[[i]]) <- dimnames(tra)[[tra_dim]]
     }
   }
-  
+    
   return(new_cv)
 }
 

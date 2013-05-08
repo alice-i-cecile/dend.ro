@@ -7,6 +7,7 @@ library(gam)
 # Perform factor regression standardization on a tree ring array
 standardize_fes <- function (tra, incQ=T, incF=T, incA=T, multiplicative=T, corr_m=T, model_type="lm", span="auto", degree=1, ...){
   
+  
   # Sanitize 0 values to NA since ringwidth of zero is really a missing value
   tra [which(tra==0)] <- NA
   
@@ -53,46 +54,51 @@ standardize_fes <- function (tra, incQ=T, incF=T, incA=T, multiplicative=T, corr
     growth_model <- gnm (growth_formula, data=tab.tra, ...)
   } else if (model_type=="gam"){
     
-    # Make a numeric version of the age factor for smoothing
-    tab.tra$A.num <- as.numeric(as.character(tab.tra$A.cv))
-    
-    # Minimum span is (degree+1)/Number of distinct observations
-    # Maximum span is 1
-    min_span <- (degree+1)/length(unique(tab.tra$A.num))
-    max_span <- 1
-    
-    # If no smoothing span parameter is given, select one automatically using AIC
-    if (span=="auto"){
-      
-      print ("Automatically selecting span parameter by AIC.")
-      
-      optim_span <- function (span){
-        local_formula <- growth_formula
-        environment (local_formula) <- environment()
-        model <- gam(local_formula, data=tab.tra)
-
-        model_AIC <- AIC(model)
-        print(c(Span=span, AIC=model_AIC))        
-        return(model_AIC)
-      }
-        
-      span <- optimize(f=optim_span, interval=c(min_span, max_span))$minimum
-      
-      print (paste("Span of", span, "selected."))
-      
+    # GAM FES is equivalent to the faster LM FES if the age effect is not computed
+    if(incA==FALSE){
+      growth_model <- lm (growth_formula, data=tab.tra,...)
     } else {
-      if (span < min_span){
-        span <- min_span
-        print(paste("Selected span too low, automatically set to", min_span))
-      }
-      if (span > max_span){
-        span <- max_span
-        print(paste("Selected span too high, automatically set to", 1))
-      }
-    } 
-    
-    # GAM smoothed fit
-    growth_model <- gam (growth_formula, data=tab.tra, ...)
+      # Make a numeric version of the age factor for smoothing
+      tab.tra$A.num <- as.numeric(as.character(tab.tra$A.cv))
+      
+      # Minimum span is (degree+1)/Number of distinct observations
+      # Maximum span is 1
+      min_span <- (degree+1)/length(unique(tab.tra$A.num))
+      max_span <- 1
+      
+      # If no smoothing span parameter is given, select one automatically using AIC
+      if (span=="auto"){
+        
+        print ("Automatically selecting span parameter by AIC.")
+        
+        optim_span <- function (span){
+          local_formula <- growth_formula
+          environment (local_formula) <- environment()
+          model <- gam(local_formula, data=tab.tra)
+          
+          model_AIC <- AIC(model)
+          print(c(Span=span, AIC=model_AIC))        
+          return(model_AIC)
+        }
+        
+        span <- optimize(f=optim_span, interval=c(min_span, max_span))$minimum
+        
+        print (paste("Span of", span, "selected."))
+        
+      } else {
+        if (span < min_span){
+          span <- min_span
+          print(paste("Selected span too low, automatically set to", min_span))
+        }
+        if (span > max_span){
+          span <- max_span
+          print(paste("Selected span too high, automatically set to", 1))
+        }
+      } 
+      
+      # GAM smoothed fit
+      growth_model <- gam (growth_formula, data=tab.tra, ...)
+    }
   }
   
   model_summ <- summary(growth_model)
