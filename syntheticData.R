@@ -37,8 +37,24 @@ rand_lnorm_trend <- function (x, m=1, s=0){
   return (rlnorm(1, m, s))
 }
 
+# Adding noise to synthetic TRAs ####
+add_noise <- function (tra, noiseSD, multiplicative=TRUE){
+  noisy_tra <- tra
+  
+  if (multiplicative){
+    noisy_tra [!is.na(tra)] <- tra [!is.na(tra)]*rlnorm(sum(!is.na(tra)), 0, noiseSD)   
+  } else {
+    noisy_tra [!is.na(tra)] <- tra [!is.na(tra)]+rnorm(sum(!is.na(tra)), 0, noiseSD)
+    
+    # Negative and zero values are invalid, remove them
+    noisy_tra[noisy_tra <= 0] <- NA
+  }
+  
+  return (noisy_tra)
+}
+
 # Generate simple synthetic TRAs ####
-crude_synth_TRA <- function (nQ, nF, nA, funcA, meanQ=0, meanF=0, meanA=1, sdQ=0, sdF=0, sdA=0, noiseSD=0, retentionFraction=1, ...){
+crude_synth_TRA <- function (nQ, nF, nA, funcA, meanQ=0, meanF=0, meanA=1, sdQ=0, sdF=0, sdA=0, noiseSD=0, retentionFraction=1, multiplicative=T, ...){
   
   # Random CVs
   cv.Q <- rlnorm (nQ, meanQ, sdQ)
@@ -56,22 +72,22 @@ crude_synth_TRA <- function (nQ, nF, nA, funcA, meanQ=0, meanF=0, meanA=1, sdQ=0
   
   tra <- cv[[1]] %o% cv[[2]] %o% cv[[3]]
   
-  # Add log-normal noise
-  tra <- tra*rlnorm(length(tra), 0, noiseSD)
-  
   # Blank out a fraction of the data at random
-  weightList <- rbinom(length(tra), 1, retentionFraction)
-  weightList [weightList==0] <- NA
+  weight_list <- rbinom(length(tra), 1, retentionFraction)
+  weight_list [weight_list==0] <- NA
   
-  tra <- tra * weightList
-    
+  tra <- tra * weight_list
+  
+  # Add  noise
+  tra <- add_noise (tra, noiseSD, multiplicative)
+  
   return (list(cv=cv, tra=tra))
 }
 
 # Realistic TRAs ####
 
 # Base constructor function
-base_synth_TRA <- function (cv_Q, cv_F, cv_A, births, deaths, sdlog=0){
+base_synth_TRA <- function (cv_Q, cv_F, cv_A, births, deaths, noiseSD=0, multiplicative=TRUE){
   
   # Make a generic simple RWL for the appropriate birth and death years
   rwl <- as.data.frame(matrix(1, length(cv_F), length(cv_Q), dimnames=list(names(cv_F), names(cv_Q))))
@@ -101,14 +117,14 @@ base_synth_TRA <- function (cv_Q, cv_F, cv_A, births, deaths, sdlog=0){
   tra <- sweep(tra, 3, cv_A, "*")
   
   # Add noise
-  tra [!is.na(tra)] <- tra [!is.na(tra)]*rlnorm(sum(!is.na(tra)), 0, sdlog)
+  tra <- add_noise (tra, noiseSD, multiplicative)
   
   return (tra)
 }
 
 # Basic realistic parameterization and construction for a modern data set
 
-modern_TRA <- function (nQ, nF, sdF, funcA, sdlog=0, GSS, ...){
+modern_TRA <- function (nQ, nF, sdF, funcA, noiseSD=0, multiplicative=TRUE, GSS, ...){
   # Assumes:
   # constant birth rate
   # Log-normal random forcing and noise
@@ -134,7 +150,7 @@ modern_TRA <- function (nQ, nF, sdF, funcA, sdlog=0, GSS, ...){
   names(cv_A) <- 1:nF
     
   # Construct full TRA
-  tra <- base_synth_TRA(cv_Q, cv_F, cv_A, births, deaths, sdlog)  
+  tra <- base_synth_TRA(cv_Q, cv_F, cv_A, births, deaths, noiseSD, multiplicative)  
   
   # Truncate age trend according to oldest tree observed
   cv_A <- cv_A[1:dim(tra)[[3]]]
