@@ -32,6 +32,7 @@ standardize_rcs <- function (tra, factor_order=c(3,2), meanType="arithmetic") {
   
   cv <- list(Q=NULL, F=NULL, A=NULL)
   
+
   # Estimate the effects one at a time
   for (effect in factor_order){
     # Estimate an effect    
@@ -43,11 +44,11 @@ standardize_rcs <- function (tra, factor_order=c(3,2), meanType="arithmetic") {
   }
   
   # Fill in dummy values for effects not estimated
-  cv <- pad_cv(cv, tra, multiplicative)
-
+  cv <- pad_cv(cv, tra, multiplicative=FALSE)
+  
   # Make sure effects are in the right order
   cv <- sort_cv(cv, tra)
-
+  
   # Rescale the CV to standard form
   cv <- rescaleCV(cv)
   
