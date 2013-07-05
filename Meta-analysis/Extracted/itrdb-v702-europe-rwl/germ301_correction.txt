@@ -1,0 +1,8 @@
+BAYERISCHER WALD, Germany - GERM301
+B. Becker
+Modified by Rob Wilson  
+
+The radii 877020 in file GERM301.rwl was shifted back one year after 
+analysis with COFECHA and a visual check of this radii against the 
+others at the site.  The modified data is stored as GERM301.corrected.rwl 
+in the ITRDB archive.
