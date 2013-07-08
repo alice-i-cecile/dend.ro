@@ -26,48 +26,13 @@ read_data <- function(data_file)
   return(rwl)
 }
 
-truncate_rwl <- function(rwl, max_entries=10000)
-{
-  selected_entries <- 0
-  selected_series <- rwl[, NULL]
-  random_order <- sample(names(rwl))
-  
-  for (i in 1:ncol(rwl))
-  {
-    if (selected_entries > max_entries)
-    {
-      break
-    }
-    
-    series_i <- rwl[random_order[i]]
-    num_entries <- sum(!is.na(series_i])
-    selected_entries <- selected_entries + num_entries
-    selected_series <- cbind(selected_series, series_i)
-  }
-
-  return(series_i)
-
-}
-
-# Truncating chronologies ####
-
-# Load the chronology
-
-# Truncated the chronology
-
-# Save the truncated chronologies
-
-# Construct a list of the truncated chronology files
-
 # Descripitive statistics ####
 
-# Find the number of measurements (raw)
+# Find the number of measurements
 count_entries <- function(rwl)
 {
   sum(!is.na(rwl))
 }
-
-# Find the number of measurements (truncated)
 
 # Find the number of series (raw)
 count_series <- function(rwl)
@@ -76,12 +41,8 @@ count_series <- function(rwl)
 }
 
 
-# Find the number of series (truncated)
-
 # Find the number of chronologies
 
-# Find the sample depth by time (raw)
-
-# Find the sample depth by time (truncated)
+# Find the sample depth by time
 
 # Plot the graph of sample depth vs. time

@@ -188,6 +188,35 @@ unsparse_tra <- function(stra)
   
 }
 
+# Go directly from a rwl to stra
+# Avoid unnecessary memory bottlenecks
+# Increase chunk size as high as feasible for optimal performance
+rwl.to.stra <- function (rwl, birth_years=NULL, chunk_size=50)
+{
+  # Break the rwl into many small parts
+  n_rwl <- ncol(rwl)
+  n_chunks <- ceiling(n_rwl / chunk_size)
+  chunks <- t(replicate(n_chunks, 1:chunk_size))+(1:n_chunks -1)*chunk_size
+  
+  # Initialize the sparse tree ring array
+  stra <- data.frame(G=NA, i=NA, t=NA, a=NA)[0,]
+
+  for (i in 1:n_chunks)
+  {
+    # Convert the rwl to a tra to a stra in chunks
+    series_indices <- chunks[i, ][chunks[i,]<=n_rwl]
+    rwl_i <- rwl[series_indices]
+    tra_i <- rwl.to.tra(rwl, birth_years[series_indices])
+    stra_i <- sparse_tra(tra_i)
+    
+    # Combine the results
+    stra <- rbind(stra, stra_i)
+  }
+  
+  return(stra)
+  
+}
+
 # Geometric mean utility function ####
 geomMean <- function(x){
   if (length(x)==0){

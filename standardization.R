@@ -8,7 +8,7 @@
 # method: which algorithm should we use to standardize the data?
 # sparse: use sparse list representation of data to reduce memory overhead
 
-standardize_tra <- function(tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="multiplicative", error="lnorm", method="likelihood", sparse=TRUE, ...)
+standardize_tra <- function(tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="multiplicative", error="lnorm", method="sfs", sparse=TRUE, ...)
 {
   # Exception handling
   
@@ -958,7 +958,6 @@ unflatten_effects <- function (flat_effects)
   
   return(effects)
 }
-
 
 standardize_mle <- function(tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="multiplicative", error="lnorm", sparse=TRUE, ...)
 {
