@@ -1,6 +1,4 @@
 # Libraries ####
-library(likelihood)
-
 
 # Wrapper for standardizing tree ring data ####
 # tra: the tree-ring array data structure containing the data to be analysed
@@ -8,12 +6,13 @@ library(likelihood)
 # form: are the effects added together or multiplied together
 # error: is the data drawn from a normal additive PDF or a multiplicative log-normal PDF
 # method: which algorithm should we use to standardize the data?
+# sparse: use sparse list representation of data to reduce memory overhead
 
-standardize_tra <- function(tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="multiplicative", error="lnorm", method="likelihood", ...)
+standardize_tra <- function(tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="multiplicative", error="lnorm", method="likelihood", sparse=TRUE, ...)
 {
   # Exception handling
   
-  if (sum(tra[tra<=0], na.rm=TRUE) > 0)
+  if (ifelse(is.data.frame(tra), sum(tra$G <= 0), sum(tra[tra<=0], na.rm=TRUE) > 0))
   {
     # Raise a warning if negative values found for multiplicative models
     if (form == "multiplicative")
@@ -37,67 +36,103 @@ standardize_tra <- function(tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="mult
   {
     warning("Model form and error distribution are an unrealistic match. Be sure to check the model residuals. Model fitting problems may arise.")
   }
+  
+  if (sum(unlist(model))==3)
+  {
+    warning("Three categorical effect model selected. Parameter estimates will be unreliable.")
+  }
 
   if (method=="likelihood")
   {
-    out <- standardize_likelihood(tra, effects, form, error, ...)
+    out <- standardize_likelihood(tra, model, form, error, sparse, ...)
   }
   else if(method == "least_squares")
   {
-    out <- standardize_least_squares(tra, effects, form, error, ...)
+    out <- standardize_least_squares(tra, model, form, error, sparse, ...)
   }
   else if(method == "sfs")
   {
-    out <- standardize_sfs(tra, effects, form, error, ...)
+    #out <- standardize_sfs(tra, model, form, error, sparse, ...)
+    out <- standardize_tsfs(tra, model, form, error, sparse, ...)
   }
   else if(method == "rcs")
   {
-    out <- standardize_rcs(tra, effects, form, error, ...)
+    out <- standardize_rcs(tra, model, form, error, sparse, ...)
   }
   return (out)
 }
 
-# Utility functions ####
-
-# Geometric mean function
-geomMean <- function(x){
-  if (length(x)==0){
-    return(NA)
-  }
-  val <- x[!is.na(x)]
-  l_val <- log(val)
-  out <- exp(mean(l_val))
-  return (out)
-}
+# Estimating and removing effects ####
 
 # Naive estimate of a single effect (analagous to constructing regional curve or standardized chronology)
-naive_effect <- function (tra, factor.dim, mean_type="arithmetic")
+est_effect <- function (tra, factor.dim, mean_type="arithmetic", sparse=TRUE)
 {  
-  if (mean_type=="geometric"){
-    est_effect <- apply(tra, factor.dim, geomMean) 
-  } else {
-    est_effect <- apply(tra, factor.dim, mean, na.rm=TRUE)
+  if(sparse)
+  {
+    id <- factor.dim + 1
+    
+    estimate_effect <- function(id_i)
+    {
+      data <- tra[tra[[id]]==id_i, "G"]
+      if (mean_type=="geometric"){
+        est_effect <- geomMean(data) 
+      } else {
+        est_effect <- mean(data, na.rm=TRUE)
+      }
+      return(est_effect)
+    }
+    
+    est_effect <- sapply(levels(tra[[id]]), estimate_effect)
+    
+  }
+  else
+  {
+    if (mean_type=="geometric"){
+      est_effect <- apply(tra, factor.dim, geomMean) 
+    } else {
+      est_effect <- apply(tra, factor.dim, mean, na.rm=TRUE)
+    }
   }
   
   return (est_effect)
 }
 
-# Remove effects of any number of canonical vectors from a tree ring array
-remove_effect <- function (tra, effect, factor.dim, form="multiplicative")
+# Remove an effect from a tree ring array
+remove_effect <- function (tra, effect, factor.dim, form="multiplicative", sparse=TRUE)
 {
-  
-  FUN <- ifelse(form =="additive","-", "/")
-  
-  removed_tra <- sweep(tra, factor.dim, effect, FUN)
+  if(sparse)
+  {
+    id <- factor.dim + 1
+        
+    removed_tra <- tra
+    
+    for (effect_id in names(effect))
+    {
+      relevant_rows <- tra[[id]]==effect_id
+      if (form=="additive")
+      {
+        removed_tra[relevant_rows,"G"] <- removed_tra[relevant_rows,"G"] - effect[effect_id]
+      }
+      else
+      {
+        removed_tra[relevant_rows,"G"] <- removed_tra[relevant_rows,"G"] / effect[effect_id]
+      }
+    }
+  }
+  else
+  {
+    FUN <- ifelse(form =="additive","-", "/")
+    
+    removed_tra <- sweep(tra, factor.dim, effect, FUN)
+  }
   
   return (removed_tra)
   
 }
 
 # Add dummy effect vectors if some are missing
-pad_effects <- function(effects, tra, form="multiplicative")
+pad_effects <- function(effects, tra, form="multiplicative", sparse=TRUE)
 {
-  
   # Set the value to fill dummy coefficients with
   if (form=="multiplicative"){
     na.value <- 1
@@ -108,15 +143,37 @@ pad_effects <- function(effects, tra, form="multiplicative")
   # Initialize dummy effects lists
   new_effects <- list(I=NA, T=NA, A=NA)
   
-  # Fill empty values  
-  for(i in c("I", "T", "A")){
-    if (length(effects[[i]] > 0)){
-      new_effects[[i]] <-  effects[[i]]
-    } else {
-      tra_dim <- which(c("I", "T", "A")==i)
-      
-      new_effects[[i]] <- rep.int(na.value, dim(tra)[tra_dim])
-      names(new_effects[[i]]) <- dimnames(tra)[[tra_dim]]
+  if(sparse)
+  {
+    # Fill empty values  
+    for(i in c("I", "T", "A")){
+      if (length(effects[[i]] > 0)){
+        new_effects[[i]] <-  effects[[i]]
+      } else {
+        tra_dim <- which(c("I", "T", "A")==i)
+        
+        new_effects[[i]] <- rep.int(na.value, nlevels(tra[[tra_dim + 1]]))
+        effect_names <- levels(tra[[tra_dim + 1]])
+        if(i=="T" | i=="A")
+        {
+          effect_names <- as.numeric(effect_names)
+        }
+        names(new_effects[[i]]) <- sort(effect_names)
+      }
+    }
+  }
+  else
+  {
+    # Fill empty values  
+    for(i in c("I", "T", "A")){
+      if (length(effects[[i]] > 0)){
+        new_effects[[i]] <-  effects[[i]]
+      } else {
+        tra_dim <- which(c("I", "T", "A")==i)
+        
+        new_effects[[i]] <- rep.int(na.value, dim(tra)[tra_dim])
+        names(new_effects[[i]]) <- dimnames(tra)[[tra_dim]]
+      }
     }
   }
   
@@ -124,20 +181,38 @@ pad_effects <- function(effects, tra, form="multiplicative")
 }
 
 # Correctly order effect vectors
-sort_effects <- function(effects, tra)
+sort_effects <- function(effects, tra, sparse=TRUE)
 {
-  
-  sorted_effects <- effects
-  
-  for (i in 1:3) 
+  if(sparse)
   {
-    correct_order <- dimnames(tra)[[i]]
+    # Only ascending sorting as no "standard" order is retained
+    sorted_effects <- list()
     
-    sorted_effects[[i]] <- effects[[i]][correct_order]
+    # Sort I
+    effect_names <- names(effects$I)
+    sorted_effects$I <- effects$I[sort(effect_names)]
     
+    # Sort T and A
+    for (j in c("T", "A"))
+    {
+      effect_names <- as.numeric(names(effects[[j]]))
+      sorted_effects[[j]] <- effects[[j]][as.character(sort(effect_names))]
+    }
+  }
+  else
+  {
+    sorted_effects <- effects
+    
+    for (i in 1:3) 
+    {
+      correct_order <- dimnames(tra)[[i]]
+      
+      sorted_effects[[i]] <- effects[[i]][correct_order]
+      
+    }
   }
   
-  return(effects)
+  return(sorted_effects)
 }
 
 # Rescale effect vectors to canonical form
@@ -184,20 +259,20 @@ rescale_effects <- function (effects, form="multiplicative")
 # Model fit statistics ####
 
 # Compute all the relevant model fit statistics for fixed-effects standardization
-model_fit_tra <- function(effects, tra, model, form, error)
+model_fit_tra <- function(effects, tra, model, form, error, sparse)
 {
   fit <- list()
   
-  fit$predicted <- predicted_tra(effects, tra, form)
-  fit$residuals <- residuals_tra (tra, fit$predicted, error)
+  fit$predicted <- predicted_tra(effects, tra, form, sparse)
+  fit$residuals <- residuals_tra (tra, fit$predicted, error, sparse)
   
-  fit$n <- n_tra(tra)
-  fit$k <- k_tra(tra, model)
-  fit$sigma <- sigma_tra(fit$residuals, error)
+  fit$n <- n_tra(tra, sparse)
+  fit$k <- k_tra(tra, model, sparse)
+  fit$sigma <- sigma_tra(fit$residuals, error, sparse)
   
-  fit$tss <- tss_tra(tra, error)
-  fit$rss <- rss_tra(fit$residuals, error)
-  fit$llh <- llh_tra(fit$residuals, error)
+  fit$tss <- tss_tra(tra, error, sparse)
+  fit$rss <- rss_tra(fit$residuals, error, sparse)
+  fit$llh <- llh_tra(fit$residuals, error, sparse)
   
   fit$Rsq <- Rsq_tra(fit$rss, fit$tss)
   fit$adj.Rsq <- adj.Rsq_tra(fit$rss, fit$tss, fit$n, fit$k)
@@ -210,137 +285,276 @@ model_fit_tra <- function(effects, tra, model, form, error)
 }
 
 # Predicted values
-predicted_tra <- function (effects, tra, form)
+predicted_tra <- function (effects, tra, form, sparse)
 {
-  predicted <- tra
-  
-  filled_cells <- which(!is.na(tra), arr.ind=TRUE)
-  
-  for (cell in 1:nrow(filled_cells))
+  if(sparse)
   {
-    i <- filled_cells[cell, 1]
-    t <- filled_cells[cell, 2]
-    a <- filled_cells[cell, 3]
+    predicted <- tra
     
-    if (form=="additive")
+    for (r in 1:nrow(predicted))
     {
-      predicted[i,t,a] <- effects$I[i] + effects$T[t] + effects$A[a]
+      i <- as.character(tra[r, "i"])
+      t <- as.character(tra[r, "t"])
+      a <- as.character(tra[r, "a"])
+      
+      if (form=="additive")
+      {
+        predicted[r, "G"] <- effects$I[i] + effects$T[t] + effects$A[a]
+      }
+      else
+      {
+        predicted[r, "G"] <- effects$I[i] * effects$T[t] * effects$A[a]
+      }
     }
-    else
+    
+  }
+  else
+  {
+    predicted <- tra
+    
+    filled_cells <- which(!is.na(tra), arr.ind=TRUE)
+    
+    for (cell in 1:nrow(filled_cells))
     {
-      predicted[i,t,a] <- effects$I[i] * effects$T[t] * effects$A[a]
+      i <- filled_cells[cell, 1]
+      t <- filled_cells[cell, 2]
+      a <- filled_cells[cell, 3]
+      
+      if (form=="additive")
+      {
+        predicted[i,t,a] <- effects$I[i] + effects$T[t] + effects$A[a]
+      }
+      else
+      {
+        predicted[i,t,a] <- effects$I[i] * effects$T[t] * effects$A[a]
+      }
     }
   }
+  
   
   return(predicted)
 }
 
 # Residuals
-residuals_tra <- function (tra, predicted, error)
+residuals_tra <- function (tra, predicted, error, sparse)
 {
-  if (error=="norm")
+  if(sparse)
   {
-    residuals <- tra - predicted
+    residuals <- tra
+    
+    if (error=="norm")
+    {
+      residuals$G <- tra$G - predicted$G
+    }
+    else
+    {
+      residuals$G <- tra$G / predicted$G
+    }
   }
   else
   {
-    residuals <- tra / predicted
+    if (error=="norm")
+    {
+      residuals <- tra - predicted
+    }
+    else
+    {
+      residuals <- tra / predicted
+    }
   }
+  
   return (residuals)
 }
 
 # Number of data points in the model
-n_tra <- function (tra)
+n_tra <- function (tra, sparse)
 {
-  n <- sum(!is.na(tra))
+  if(sparse)
+  {
+    n <- nrow(tra)
+  }
+  else
+  {
+    n <- sum(!is.na(tra))
+  }
+  
   return(n)
 }
 
 # Number of parameters estimated (k)
-k_tra <- function (tra, model)
+k_tra <- function (tra, model, sparse)
 {
-  # One parameter automatically for 
-  k <- 1
-  
-  # One parameter is estimated for each index of the effect vectors
-  if (model$I)
+  if(sparse)
   {
-    k <- k + dim(tra)[1]
+    # One parameter automatically for 
+    k <- 1
+    
+    # One parameter is estimated for each index of the effect vectors
+    if (model$I)
+    {
+      k <- k + nlevels(tra$i)
+    }
+    if (model$T)
+    {
+      k <- k + nlevels(tra$t)
+    }
+    if (model$A)
+    {
+      k <- k + nlevels(tra$a)
+    }
+    
+    # Information about some parameters is lost due to rescaling (dummy variable trap)
+    num_effects <- sum(unlist(model))
+    
+    k <- k - (num_effects-1)
   }
-  if (model$T)
+  else
   {
-    k <- k + dim(tra)[2]
+    # One parameter automatically for 
+    k <- 1
+    
+    # One parameter is estimated for each index of the effect vectors
+    if (model$I)
+    {
+      k <- k + dim(tra)[1]
+    }
+    if (model$T)
+    {
+      k <- k + dim(tra)[2]
+    }
+    if (model$A)
+    {
+      k <- k + dim(tra)[3]
+    }
+    
+    # Information about some parameters is lost due to rescaling (dummy variable trap)
+    num_effects <- sum(unlist(model))
+    
+    k <- k - (num_effects-1)
   }
-  if (model$A)
-  {
-    k <- k + dim(tra)[3]
-  }
-  
-  # Information about some parameters is lost due to rescaling (dummy variable trap)
-  num_effects <- sum(unlist(model))
-  
-  k <- k - (num_effects-1)
   
   return(k)
 }
 
 # Calculate sigma, the level of dispersal in the noise PDF as the RMSE (the standard deviation of the residuals)
-sigma_tra <- function (residuals, error)
+sigma_tra <- function (residuals, error, sparse)
 {
-  val <- residuals[!is.na(residuals)]
-  if (error=="lnorm")
+  if(sparse)
   {
-    val <- log(val)
+    val <- residuals$G
+    if (error=="lnorm")
+    {
+      val <- log(val)
+    }
+    
+    # sigma <- sqrt(mean(val^2))
+    sigma <- sd(val)
   }
-  
-  # sigma <- sqrt(mean(val^2))
-  sigma <- sd(val)
+  else
+  {
+    val <- residuals[!is.na(residuals)]
+    if (error=="lnorm")
+    {
+      val <- log(val)
+    }
+    
+    # sigma <- sqrt(mean(val^2))
+    sigma <- sd(val)
+  }
   
   return(sigma)
 }
 
 # Total sum of squares
-tss_tra <- function (tra, error)
+tss_tra <- function (tra, error, sparse)
 {
-  val <- tra[!is.na(tra)]
-  if (error=="lnorm")
+  if(sparse)
   {
-    val <- log(val)
+    val <- tra$G
+    if (error=="lnorm")
+    {
+      val <- log(val)
+    }
+    
+    mean_val <- mean(val)
+    tss <- sum((val-mean_val)^2)
   }
-
-  mean_val <- mean(val)
-  tss <- sum((val-mean_val)^2)
+  else
+  {
+    val <- tra[!is.na(tra)]
+    if (error=="lnorm")
+    {
+      val <- log(val)
+    }
+    
+    mean_val <- mean(val)
+    tss <- sum((val-mean_val)^2)
+  }
+  
   return(tss)
 }
 
 # Residual sum of squares
-rss_tra <- function (residuals, error)
+rss_tra <- function (residuals, error, sparse)
 {
-  val <- residuals[!is.na(residuals)]
-  if (error=="lnorm")
+  if(sparse)
   {
-    val <- log(val)
+    val <- residuals$G
+    if (error=="lnorm")
+    {
+      val <- log(val)
+    }
+    
+    rss <- sum(val^2)
+  }
+  else
+  {
+    val <- residuals[!is.na(residuals)]
+    if (error=="lnorm")
+    {
+      val <- log(val)
+    }
+    
+    rss <- sum(val^2)
   }
   
-  rss <- sum(val^2)
   return(rss)
 }
 
 # Log-likelihood
-llh_tra <- function (residuals, error)
+llh_tra <- function (residuals, error, sparse)
 {
-  sigma <- sigma_tra(residuals, error)
-  
-  val <- residuals[!is.na(residuals)]
-  
-  # Likelihood is proportional to the probability of observing the data, given the parameters
-  if(error=="norm")
+  if(sparse)
   {
-    llh <- sum(dnorm(val, sd=sigma, log=TRUE))
+    sigma <- sigma_tra(residuals, error, sparse)
+    
+    val <- residuals$G
+    
+    # Likelihood is proportional to the probability of observing the data, given the parameters
+    if(error=="norm")
+    {
+      llh <- sum(dnorm(val, sd=sigma, log=TRUE))
+    }
+    else
+    {
+      llh <- sum(dlnorm(val, sd=sigma, log=TRUE))
+    }
   }
   else
   {
-    llh <- sum(dlnorm(val, sd=sigma, log=TRUE))
+    sigma <- sigma_tra(residuals, error, sparse)
+    
+    val <- residuals[!is.na(residuals)]
+    
+    # Likelihood is proportional to the probability of observing the data, given the parameters
+    if(error=="norm")
+    {
+      llh <- sum(dnorm(val, sd=sigma, log=TRUE))
+    }
+    else
+    {
+      llh <- sum(dlnorm(val, sd=sigma, log=TRUE))
+    }
   }
   
   return(llh)
@@ -386,8 +600,23 @@ BIC_tra <- function (llh, k, n)
 
 # Regional curve standardization ####
 # effect_order: the order in which effects are sequentially estimated
-standardize_rcs <- function(tra, model=list(I=FALSE, A=TRUE, T=TRUE), form="multiplicative", error="lnorm")
+standardize_rcs <- function(tra, model=list(I=FALSE, A=TRUE, T=TRUE), form="multiplicative", error="lnorm", sparse=TRUE)
 {
+  
+  # Convert the tree-ring array to the appropriate form (sparse/full)
+  if (sparse)
+  {
+    if (!is.data.frame(tra))
+    {
+      tra <- sparse_tra(tra)
+    }
+  } else
+  {
+    if (is.data.frame(tra))
+    {
+      tra <- unsparse_tra(tra)
+    }
+  }
   
   # Select appropriate type of mean
   if (error=="lnorm"){
@@ -397,7 +626,7 @@ standardize_rcs <- function(tra, model=list(I=FALSE, A=TRUE, T=TRUE), form="mult
   }
   
   # Determine effect order from order in which I, T, A is listed
-  inc_effects <- names(model[model==TRUE])
+  inc_effects <- names(model[unlist(model)==TRUE])
   name_dim_dict <- c(I="I", T="T", A="A")
   effect_order <- match(inc_effects, name_dim_dict)
   
@@ -410,26 +639,26 @@ standardize_rcs <- function(tra, model=list(I=FALSE, A=TRUE, T=TRUE), form="mult
   # Estimate the effects one at a time
   for (effect in effect_order){
     # Estimate an effect    
-    effects[[effect]] <- naive_effect(working_tra, effect, mean_type)
+    effects[[effect]] <- est_effect(working_tra, effect, mean_type, sparse)
     
     # Remove the effect
-    working_tra <- remove_effect(tra, effects[[effect]], effect, form)
+    working_tra <- remove_effect(working_tra, effects[[effect]], effect, form, sparse)
   }
   
   # Fill in dummy values for effects not estimated
-  effects <- pad_effects(effects, tra, form)
+  effects <- pad_effects(effects, tra, form, sparse)
   
   # Make sure effects are in the right order
-  effects <- sort_effects(effects, tra)
+  effects <- sort_effects(effects, tra, sparse)
   
   # Rescale the effects to standard form
   effects <- rescale_effects(effects, form)
   
   # Compute model fit statistics
-  fit <- model_fit_tra (effects, tra, model, form, error)
+  fit <- model_fit_tra (effects, tra, model, form, error, sparse)
     
   # Record model fitting settings
-  settings <- list(model=model, form=form, error=error)
+  settings <- list(model=model, form=form, error=error, sparse=sparse)
   
   out <- list(effects=effects, tra=tra, fit=fit, settings=settings)
   
@@ -437,8 +666,22 @@ standardize_rcs <- function(tra, model=list(I=FALSE, A=TRUE, T=TRUE), form="mult
 }
 
 # Signal-free regional curve standardization ####
-standardize_sfs <-function (tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="multiplicative", error="lnorm", cor_threshold=0.999999)
+standardize_sfs <-function (tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="multiplicative", error="lnorm", sparse=TRUE, cor_threshold=0.999999)
 {
+  # Convert the tree-ring array to the appropriate form (sparse/full)
+  if (sparse)
+  {
+    if (!is.data.frame(tra))
+    {
+      tra <- sparse_tra(tra)
+    }
+  } else
+  {
+    if (is.data.frame(tra))
+    {
+      tra <- unsparse_tra(tra)
+    }
+  }
   
   # Select appropriate type of mean
   if (error=="lnorm"){
@@ -449,7 +692,7 @@ standardize_sfs <-function (tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="mult
   
   # Determine effect order from order in which I, T, A is listed
   # Effect order needs to be of length 2 to work  
-  inc_effects <- names(model[model==TRUE])
+  inc_effects <- names(model[unlist(model)==TRUE])
   name_dim_dict <- c(I="I", T="T", A="A")
   effect_order <- match(inc_effects, name_dim_dict)
   
@@ -467,26 +710,35 @@ standardize_sfs <-function (tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="mult
     print (paste("Iteration", iteration))
     
     # Estimate the values for the first dimension
-    est_1 <- naive_effect(working_tra, effect_order[1], mean_type)
+    est_1 <- est_effect(working_tra, effect_order[1], mean_type, sparse)
     #print(est_1)
     
     # Remove those effects temporarily
-    intermediate_tra <- remove_effect (working_tra, est_1, effect_order[1], form)
+    intermediate_tra <- remove_effect (working_tra, est_1, effect_order[1], form, sparse)
     
     # Estimate values for the second dimensions
-    est_2 <- naive_effect(intermediate_tra, effect_order[2], mean_type)
+    est_2 <- est_effect(intermediate_tra, effect_order[2], mean_type, sparse)
     #print(est_2)
     
     # Remove those effects from the working data
-    working_tra <- remove_effect (working_tra, est_2, effect_order[2], form)
+    working_tra <- remove_effect (working_tra, est_2, effect_order[2], form, sparse)
     
     # Check for convergence. Use the log-correlation if the error term is suspected to be multiplicative lognormal
     if (error=="norm"){
-      conv_cor <- cor(working_tra, last_tra,  "complete.obs") 
-      print (paste("Correlation of current and last iteration of", conv_cor))
+      if (sparse)
+      {
+        conv_cor <- cor(working_tra$G, last_tra$G) 
+      }else{
+        conv_cor <- cor(working_tra, last_tra,  "complete.obs") 
+      }
+      
     } else {
-      conv_cor <- cor(log(working_tra), log(last_tra),  "complete.obs")
-      print (paste("Log-correlation of current and last iteration of", conv_cor))
+      if (sparse)
+      {
+        conv_cor <- cor(log(working_tra$G), log(last_tra$G))
+      }else{
+        conv_cor <- cor(log(working_tra), log(last_tra),  "complete.obs")
+      }
     }
         
     if (conv_cor>=cor_threshold){
@@ -506,11 +758,11 @@ standardize_sfs <-function (tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="mult
   names (miss_effect) <- dimnames(tra)[[miss.dim]]
   
   # Primary chronology is mean of converged working TRA
-  prim_effect <- naive_effect(working_tra, effect_order[1], mean_type)
+  prim_effect <- est_effect(working_tra, effect_order[1], mean_type, sparse)
   
   # Secondary chronology is mean of original data with primary effects removed
-  sec.series <- remove_effect (tra, prim_effect, effect_order[1], form)
-  sec_effect<- naive_effect(sec.series, effect_order[2], mean_type)
+  sec.series <- remove_effect (tra, prim_effect, effect_order[1], form, sparse)
+  sec_effect<- est_effect(sec.series, effect_order[2], mean_type, sparse)
   
   # Compile the effects in the approriate order
   effects <- list(prim_effect, sec_effect, miss_effect)
@@ -522,10 +774,10 @@ standardize_sfs <-function (tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="mult
   effects <- rescale_effects(effects, form)
   
   # Compute model fit statistics
-  fit <- model_fit_tra (effects, tra, model, form, error)
+  fit <- model_fit_tra (effects, tra, model, form, error, sparse)
   
   # Record model fitting settings
-  settings <- list(model=model, form=form, error=error)
+  settings <- list(model=model, form=form, error=error, sparse=sparse)
   
   out <- list(effects=effects, tra=tra, fit=fit, settings=settings)
   
@@ -535,23 +787,21 @@ standardize_sfs <-function (tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="mult
 # Truly signal-free regional curve standardization ####
 # Cleans up SF-RCS algorithm and allows expansion to N dimensions
 
-standardize_tsfs <- function (tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="multiplicative", error="lnorm", cor_threshold=0.999999)
+standardize_tsfs <- function (tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="multiplicative", error="lnorm", sparse=TRUE, cor_threshold=0.999999)
 {
-    
-  # Create storage for the estimated effects
-  effects <-vector(mode="list", length=3)
-  names (effects) <- c("I","T","A")
-  
-  # Dummy starting effects
-  for (i in 1:3){
-    if (form=="additive")
+  # Convert the tree-ring array to the appropriate form (sparse/full)
+  if (sparse) 
+  {
+    if (!is.data.frame(tra))
     {
-      effects[[i]] <-  rep.int(0, dim(tra)[[i]])
-    } else
-    {
-      effects[[i]] <-  rep.int(1, dim(tra)[[i]])
+      tra <- sparse_tra(tra)
     }
-    names(effects[[i]]) <- dimnames(tra)[[i]]
+  } else
+  {
+    if (is.data.frame(tra))
+    {
+      tra <- unsparse_tra(tra)
+    }
   }
   
   # Select appropriate type of mean
@@ -561,8 +811,39 @@ standardize_tsfs <- function (tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="mu
     mean_type <- "arithmetic"
   }
   
+  # Create storage for the estimated effects
+  effects <-vector(mode="list", length=3)
+  names (effects) <- c("I","T","A")
+  
+  # Dummy starting effects
+  for (i in 1:3){
+    if(sparse)
+    {
+      dim_i <- nlevels(tra[[i+1]])
+    } else
+    {
+      dim_i <- dim(tra)[[i]]
+    }
+    
+    if (form=="additive")
+    {
+      effects[[i]] <-  rep.int(0,  dim_i)
+    } else
+    {
+      effects[[i]] <-  rep.int(1,  dim_i)
+    }
+    
+    if(sparse)
+    {
+      names(effects[[i]]) <- levels(tra[[i+1]])
+    } else
+    {
+      names(effects[[i]]) <- dimnames(tra)[[i]]
+    }
+  }
+  
   # Determine effect order from order in which I, T, A is listed
-  inc_effects <- names(model[model==TRUE])
+  inc_effects <- names(model[unlist(model)==TRUE])
   name_dim_dict <- c(I="I", T="T", A="A")
   effect_order <- match(inc_effects, name_dim_dict)
   
@@ -581,45 +862,59 @@ standardize_tsfs <- function (tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="mu
     for (j in effect_order){
       
       # Estimate the effects across each dimension
-      est_j <- naive_effect(working_tra, j, mean_type)
+      est_j <- est_effect(working_tra, j, mean_type, sparse)
       
       # Remove them from the signal-free data
-      working_tra <- remove_effect (working_tra, est_j, j, form)
+      working_tra <- remove_effect (working_tra, est_j, j, form, sparse)
       
       # Combine them with previously determined effects for that dimension
       if (form == "additive")
       {
         effects[[j]] <- effects[[j]] + est_j
-      }
-      else
+      } else
       {
         effects[[j]] <- effects[[j]] * est_j
       }
     }
     
     # Check for convergence. Use the log-correlation if the error term is suspected to be multiplicative lognormal
-    if (mean_type=="arithmetic"){
-      conv_cor <- cor(working_tra, last_tra,  "complete.obs") 
+    if (error=="norm"){
+      if (sparse)
+      {
+        conv_cor <- cor(working_tra$G, last_tra$G) 
+      }else{
+        conv_cor <- cor(working_tra, last_tra,  "complete.obs") 
+      }
+      
     } else {
-      conv_cor <- cor(log(working_tra), log(last_tra),  "complete.obs")
+      if (sparse)
+      {
+        conv_cor <- cor(log(working_tra$G), log(last_tra$G))
+      }else{
+        conv_cor <- cor(log(working_tra), log(last_tra),  "complete.obs")
+      }
     }
     
     if (conv_cor>=cor_threshold){
       converged <- TRUE
     }
-    
+  
   }
     
   # Rescale the effects to standard form
   effects <- rescale_effects(effects, form)
 
   # Compute model fit statistics
-  fit <- model_fit_tra (effects, tra, model, form, error)
+  fit <- model_fit_tra (effects, tra, model, form, error, sparse)
   
   # Record model fitting settings
-  settings <- list(model=model, form=form, error=error)
+  settings <- list(model=model, form=form, error=error, sparse=sparse)
   
   out <- list(effects=effects, tra=tra, fit=fit, settings=settings)
   
   return (out)
 }
+
+# Maximum likelihood fixed effects standardization ####
+# Fits models using maximum likelihood
+# Searches for solutions with simulated annealing

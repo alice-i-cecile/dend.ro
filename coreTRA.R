@@ -1,13 +1,8 @@
-# Geometric mean utility function
-geomMean <- function(x){
-  if (length(x)==0){
-    return(NA)
-  }
-  val <- x[!is.na(x)]
-  l_val <- log(val)
-  out <- exp(mean(l_val))
-  return (out)
-}
+# Libraries ####
+library(foreach)
+
+
+# RWL to TRA and back again ####
 
 # Get endpoints of a rwl series
 getEndpoints <- function (series, side="start"){
@@ -134,33 +129,6 @@ tra.to.rwl <- function (tra) {
   return (rwl)
 }
 
-# Construct a partially filled tra from canonical vectors and a reference tree ring array describing position data
-tra.from.cv <- function (cv, tra=NULL){
-  
-  # Construct full tree ring array
-  completeTRA <-  cv[[1]]
-  
-  for (i in 2:length(cv)){
-    completeTRA <- completeTRA %o% cv[[i]]
-  }
-  
-  if (!is.null(tra)){
-    # The position array only retains presence/absence data
-    positionArray <- tra
-    positionArray[!is.na(tra)] <- 1
-    
-    # Retain only values that were present before. Uses dimnames from the canonical vectors
-    newTRA <- completeTRA * positionArray
-    
-    return (newTRA)
-    
-  } else {
-    
-    return (completeTRA)
-  }
-  
-}
-
 # Get sample size along a dimension ####
 sample_depth_tra <- function(tra, factor.dim=2){ #1 is tree, 2 is time, 3 is age
   
@@ -169,4 +137,65 @@ sample_depth_tra <- function(tra, factor.dim=2){ #1 is tree, 2 is time, 3 is age
   sample_depth <- apply(filled_cells, factor.dim, sum)
 
   return (sample_depth)
+}
+
+# Handling sparse tree-ring arrays ####
+
+# Compress a (full) tree-ring array to its sparse form
+sparse_tra <- function(tra)
+{
+  full <- !is.na(tra)
+  values <- tra[full]
+  ind_pos <- which(full, arr.ind=T)
+  
+  i <- dimnames(full)[[1]][ind_pos[,1]]
+  t <- dimnames(full)[[2]][ind_pos[,2]]
+  a <- dimnames(full)[[3]][ind_pos[,3]]
+  
+  stra <- data.frame(G=values, i=i, t=t, a=a)
+  stra[2:4] <- as.factor(stra[2:4])
+  
+  
+  return (stra)
+}
+
+
+# Uncompress a (sparse) tree-ring array to its full form
+unsparse_tra <- function(stra)
+{
+  # Sort levels of indexes to hopefully preserve temporal ordering
+  indices <- lapply(stra[2:ncol(stra)], levels)
+  indices[c("t", "a")] <- lapply(indices[c("t", "a")], as.numeric)
+  indices <- lapply(indices, sort)
+  indices[c("t", "a")] <- lapply(indices[c("t", "a")], as.character)
+  
+  # Generate an array of the appropriate size
+  tra <- array(data=NA, dim=sapply(indices, length), dimnames=indices)
+  
+  # Fill in the recorded data  
+  for (j in 1:nrow(stra))
+  {
+    stra_row <- stra[j,]
+    
+    i <- as.character(stra[j,"i"])
+    t <- as.character(stra[j,"t"])
+    a <- as.character(stra[j,"a"])
+    G <- stra[j,"G"]
+    
+    tra[i,t,a] <- G
+  }
+  
+  return(tra)
+  
+}
+
+# Geometric mean utility function ####
+geomMean <- function(x){
+  if (length(x)==0){
+    return(NA)
+  }
+  val <- x[!is.na(x)]
+  l_val <- log(val)
+  out <- exp(mean(l_val))
+  return (out)
 }
