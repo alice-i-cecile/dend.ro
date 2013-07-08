@@ -153,8 +153,7 @@ sparse_tra <- function(tra)
   a <- dimnames(full)[[3]][ind_pos[,3]]
   
   stra <- data.frame(G=values, i=i, t=t, a=a)
-  stra[2:4] <- as.factor(stra[2:4])
-  
+  stra[2:4] <- lapply(stra[2:4], as.factor)
   
   return (stra)
 }
