@@ -1,19 +1,26 @@
+rm(list=ls())
+start_time <- Sys.time()
+
 # Libraries ####
 library(ggplot2)
 library(reshape2)
 library(dplR)
 library(plyr)
+library(pastecs)
+
+source("standardization.R")
+source("coreTRA.R")
 
 # Saving parameters ####
 
 # Set the height and width of graphics (cm)
-save_width <- 8
-save_height <- 8
+save_width <- 17.2
+save_height <- 17.2
 
 # Set RNG seed and number of chronoologies to analyse ####
 # Ensure consistent RNG
 set.seed(seed=42)
-N <- 20
+N <- 10
 
 # Utility functions ####
 meta_apply <- function(data_files, FUN, ...)
@@ -178,7 +185,7 @@ all_analyses <- function(tra, method="sfs", sparse=TRUE, ...)
 }
 
 # Clean and perform all analyses
-model_comp <- function (rwl, method="sfs", sparse=TRUE, ...)
+model_compare <- function (rwl, method="sfs", sparse=TRUE, ...)
 {
   # Clean 0 and negative values out of the data
   rwl[rwl<=0] <- NA
@@ -203,7 +210,7 @@ model_comp <- function (rwl, method="sfs", sparse=TRUE, ...)
 # Keep track of where you've stopped
 
 # Initialize counter
-# write(1, file="./Meta-analysis/Results/all_models/chron_counter.txt")
+write(1, file="./Meta-analysis/Results/all_models/chron_counter.txt")
 
 # Pick up where you last left off
 chron_counter <- scan(file="./Meta-analysis/Results/all_models/chron_counter.txt")
@@ -213,13 +220,14 @@ for (i in chron_counter:nrow(data_files))
   
   # Load and analyse the data
   rwl <- read_data(data_files[i,])
-  analyses_list <- model_comp(rwl, method="sfs", sparse=TRUE)
+  analyses_list <- model_compare(rwl, method="sfs", sparse=TRUE)
   
   # Save the results
   path <- "./Meta-analysis/Results/all_models/analysis"
   id <- strsplit(as.character(data_files[i, "file"]), split=".rwl")[[1]][1]
   file_name <- paste(id, "ALL_MODELS.RData", sep="_")
   save(analyses_list, file=paste(path, file_name, sep="/"))
+  rm(analyses_list)
   
   # Update your place
   chron_counter <- chron_counter + 1
@@ -465,7 +473,7 @@ ggsave(filename="./Meta-analysis/Results/all_models/n_vs_effects.pdf", plot=n_vs
 # Keep track of where you've stopped
 
 # Initialize counter
-# write(1, file="./Meta-analysis/Results/gam/chron_counter.txt")
+write(1, file="./Meta-analysis/Results/gam/chron_counter.txt")
 
 # Pick up where you last left off
 chron_counter <- scan(file="./Meta-analysis/Results/gam/chron_counter.txt")
@@ -486,10 +494,11 @@ for (i in chron_counter:nrow(data_files))
   id <- strsplit(as.character(data_files[i, "file"]), split=".rwl")[[1]][1]
   file_name <- paste(id, "GAM.RData", sep="_")
   save(analyses_list, file=paste(path, file_name, sep="/"))
+  rm(analyses_list)
   
   # Update your place
   chron_counter <- chron_counter + 1
-  write(chron_counter, file="./Meta-analysis/Results/all_models/chron_counter.txt")
+  write(chron_counter, file="./Meta-analysis/Results/gam/chron_counter.txt")
 }
 
 # Load analyses and extract model fit statistics
@@ -641,6 +650,11 @@ msb_ratios <- lapply(gam_effects, function(x)
   }
 )
 
+# Check for trends in these ratios
+msb_trends <- melt(sapply(msb_ratios, function(x) cor.test(x, 1:length(x), method="spearman")$estimate))
+
+msb_trend_plot <- ggplot(msb_trends, aes(x=value)) + geom_density(fill="black") + theme_bw() + xlab("Spearman's rho test for trend in ratios of G=TA to G=ITA time effects") + ylab("Density")
+
 # Graph the ratio of TA / ITA time effects by year
 msb_points <- unlist(msb_ratios)
 msb_df <- data.frame(ratio=msb_points, year=as.numeric(names(msb_points)))
@@ -659,5 +673,12 @@ ggsave(filename="./Meta-analysis/Results/gam/selection_frequency.svg", plot=sel_
 ggsave(filename="./Meta-analysis/Results/gam/selection_frequency.pdf", plot=sel_freq_plot, width=save_width, height=save_height, units="cm")
 
 save(msb_ratios, file="./Meta-analysis/Results/gam/msb_ratios.RData")
+ggsave(filename="./Meta-analysis/Results/gam/msb_trends.svg", plot=msb_trend_plot, width=save_width, height=save_height, units="cm")
+ggsave(filename="./Meta-analysis/Results/gam/msb_trends.pdf", plot=msb_trend_plot, width=save_width, height=save_height, units="cm")
 ggsave(filename="./Meta-analysis/Results/gam/msb.svg", plot=msb_plot, width=save_width, height=save_height, units="cm")
 ggsave(filename="./Meta-analysis/Results/gam/msb.pdf", plot=msb_plot, width=save_width, height=save_height, units="cm")
+
+# Print time elapsed
+finish_time <- Sys.time()
+print(start_time)
+print(finish_time)

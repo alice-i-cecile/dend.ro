@@ -38,7 +38,7 @@ standardize_tra <- function(tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="mult
     warning("Model form and error distribution are an unrealistic match. Be sure to check the model residuals. Model fitting problems may arise.")
   }
   
-  if (sum(unlist(model))==3)
+  if (sum(unlist(model))==3 & method != "gam")
   {
     warning("Three categorical effect model selected. Parameter estimates will be unreliable.")
   }
@@ -273,30 +273,30 @@ model_fit_tra <- function(effects, tra, model, form, error, sparse, method="sfs"
   if (sum(unlist(model))==0)
   {
     # Predictions of the null model are the null value
-    predicted <- tra
+    fit$predicted <- tra
     
     if (sparse) 
     {
       if (form=="additive")
       {
-        predicted$G <- 0
+        fit$predicted$G <- 0
       } else
       {
-        predicted$G <- 1
+        fit$predicted$G <- 1
       }
     } else 
     {
       if (form=="additive")
       {
-        predicted[!is.na(predicted)] <- 0
+        fit$predicted[!is.na(fit$predicted)] <- 0
       } else
       {
-        predicted[!is.na(predicted)] <- 1
+        fit$predicted[!is.na(fit$predicted)] <- 1
       }
     }
     
     # Residuals of the null model are the observed data
-    residuals <- tra
+    fit$residuals <- tra
     
   } else {
     fit$predicted <- predicted_tra(effects, tra, form, sparse)
@@ -547,7 +547,8 @@ rss_tra <- function (residuals, error, sparse)
       val <- log(val)
     }
     
-    rss <- sum(val^2)
+    mean_val <- mean(val)
+    rss <-sum((val-mean_val)^2)
   }
   else
   {
@@ -557,7 +558,8 @@ rss_tra <- function (residuals, error, sparse)
       val <- log(val)
     }
     
-    rss <- sum(val^2)
+    mean_val <- mean(val)
+    rss <- sum((val-mean_val)^2)
   }
   
   return(rss)
@@ -894,7 +896,15 @@ standardize_tsfs <- function (tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="mu
   effect_order <- match(inc_effects, name_dim_dict)
   
   # Loop controls
-  converged <- FALSE
+  
+  # Don't attempt to fit null models
+  if (length(inc_effects)==0)
+  {
+    converged <- TRUE 
+  } else 
+  {
+    converged <- FALSE
+  }
   iteration <- 0
   working_tra <- tra
   
@@ -1222,16 +1232,17 @@ extract_effects_gam <- function(growth_model, model, form, tra)
   predicted_by_age <- predict(growth_model, dummy_data)
   
   # Remove the known effects of time and individuals
+  # Convoluted partial matching code to handle variable name truncation
   if (form=="additive")
   {
     base_line <- 0
     if (model$I)
     {
-      base_line <- base_line + effects$I[which(names(effects$I)==levels(tra$i)[2])]
+      base_line <- base_line + effects$I[which(!is.na(pmatch(names(effects$I), levels(tra$i)[2])))]
     }
     if (model$T)
     {
-      base_line <- base_line + effects$T[which(names(effects$T)==levels(tra$t)[2])]
+      base_line <- base_line + effects$T[which(!is.na(pmatch(names(effects$T), levels(tra$t)[2])))]
     }
     effects$A <- predicted_by_age - base_line
   } else 
@@ -1239,11 +1250,11 @@ extract_effects_gam <- function(growth_model, model, form, tra)
     base_line <- 1
     if (model$I)
     {
-      base_line <- base_line * effects$I[which(names(effects$I)==levels(tra$i)[2])]
+      base_line <- base_line * effects$I[which(!is.na(pmatch(names(effects$I), levels(tra$i)[2])))]
     }
     if (model$T)
     {
-      base_line <- base_line * effects$T[which(names(effects$T)==levels(tra$t)[2])]
+      base_line <- base_line * effects$T[which(!is.na(pmatch(names(effects$T), levels(tra$t)[2])))]
     }
     effects$A <- predicted_by_age / base_line
   }
