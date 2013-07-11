@@ -34,13 +34,23 @@ std.SFS.ITA <- standardize_tra(tra, model=list(I=T, T=T, A=T), method="sfs")
 fit.SFS.ITA <- unlist(std.SFS.ITA$fit[3:13])
 rm(std.SFS.ITA)
 
+std.GAM.TA <- standardize_tra(tra, model=list(I=F, T=T, A=T), method="gam")
+fit.GAM.TA <- unlist(std.GAM.TA$fit[3:13])
+rm(std.GAM.TA)
+
+std.GAM.ITA <- standardize_tra(tra, model=list(I=T, T=T, A=T), method="gam")
+fit.GAM.ITA <- unlist(std.GAM.ITA$fit[3:13])
+rm(std.GAM.ITA)
+
 fit_df <- data.frame(
   fit.RCS.AT,
   fit.RCS.TA,
   fit.RCS.ITA,
   fit.SFS.AT,
   fit.SFS.TA,
-  fit.SFS.ITA
+  fit.SFS.ITA,
+  fit.GAM.TA,
+  fit.GAM.ITA
 )
 
 print(fit_df)
