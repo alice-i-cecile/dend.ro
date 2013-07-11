@@ -129,16 +129,6 @@ tra.to.rwl <- function (tra) {
   return (rwl)
 }
 
-# Get sample size along a dimension ####
-sample_depth_tra <- function(tra, factor.dim=2){ #1 is tree, 2 is time, 3 is age
-  
-  filled_cells <- !is.na(tra)
-  
-  sample_depth <- apply(filled_cells, factor.dim, sum)
-
-  return (sample_depth)
-}
-
 # Handling sparse tree-ring arrays ####
 
 # Compress a (full) tree-ring array to its sparse form
@@ -191,27 +181,68 @@ unsparse_tra <- function(stra)
 # Go directly from a rwl to stra
 # Avoid unnecessary memory bottlenecks
 # Increase chunk size as high as feasible for optimal performance
-rwl.to.stra <- function (rwl, birth_years=NULL, chunk_size=50)
+rwl.to.stra <- function (rwl, birth_years=NULL)
 {
-  # Break the rwl into many small parts
-  n_rwl <- ncol(rwl)
-  n_chunks <- ceiling(n_rwl / chunk_size)
-  chunks <- t(replicate(n_chunks, 1:chunk_size))+(1:n_chunks -1)*chunk_size
-  
-  # Initialize the sparse tree ring array
-  stra <- data.frame(G=NA, i=NA, t=NA, a=NA)[0,]
-
-  for (i in 1:n_chunks)
-  {
-    # Convert the rwl to a tra to a stra in chunks
-    series_indices <- chunks[i, ][chunks[i,]<=n_rwl]
-    rwl_i <- rwl[series_indices]
-    tra_i <- rwl.to.tra(rwl, birth_years[series_indices])
-    stra_i <- sparse_tra(tra_i)
+    if (is.null(birth_years)){
+      # Determine birth for each tree
+      birth_years <- foreach(i=colnames(rwl)) %do% {getEndpoints(rwl[i], side="start")}
+      names (birth_years) <- names(rwl)
+      
+    }  else {
+      # If rwl file is too short, add empty rows to it
+      birth_limit <- min(sapply(birth_years, as.numeric))
+      rwl_limit <- min(sapply(rownames(rwl), as.numeric))
+      
+      if (birth_limit < rwl_limit){
+        num_missing <- rwl_limit-birth_limit
+        
+        empty_rows <- rbind(rwl[0,], matrix(NA, num_missing, ncol(rwl)))
+        
+        colnames(empty_rows) <- colnames(rwl)
+        rownames(empty_rows) <- birth_limit:(rwl_limit-1)
+        
+        rwl <- rbind(empty_rows, rwl)
+      }
+    }
     
-    # Combine the results
-    stra <- rbind(stra, stra_i)
-  }
+    # Find the indices for each year
+    birth_index <- vector ()
+    
+    for (i in 1:length(birth_years)){
+      birth_index[i] <- which(rownames(rwl)==toString(birth_years[i]))
+    }
+    
+    names (birth_index) <- names (birth_years)
+   
+    # Find the full cells
+    filled <- which(!is.na(rwl), arr.ind=TRUE)
+    n_data_points <- nrow(filled)
+     
+    
+    add_growth_data <- function (year, tree)
+    {
+      birth <- birth_index[tree]
+      # Extract growth data
+      G <- rwl [year, tree]
+      
+      # Find tree of growth data
+      i <- names(rwl)[tree]
+      
+      # Find year of growth data
+      t <- rownames(rwl)[year]
+      
+      # Find age of ring data
+      a <- year - birth + 1
+      
+      out <- list(G, i, t, a)
+      return(out)
+    }
+    
+    # Find the growth data at each filled cell and record its position
+    raw_stra <- mapply(add_growth_data, year=filled[,1], tree=filled[,2], SIMPLIFY=FALSE)
+    stra <- data.frame(matrix(unlist(raw_stra),ncol=4, byrow=TRUE))
+    names(stra) <- c("G", "i", "t", "a")
+    stra[[1]] <- as.numeric(stra[[1]])
   
   return(stra)
   
@@ -226,4 +257,47 @@ geomMean <- function(x){
   l_val <- log(val)
   out <- exp(mean(l_val))
   return (out)
+}
+
+# Get sample size along a dimension ####
+sample_depth_tra <- function(tra, factor.dim=2, sparse=FALSE){ #1 is tree, 2 is time, 3 is age
+  # Convert the tree-ring array to the appropriate form (sparse/full)
+  if (sparse)
+  {
+    if (!is.data.frame(tra))
+    {
+      tra <- sparse_tra(tra)
+    }
+  } else
+  {
+    if (is.data.frame(tra))
+    {
+      tra <- unsparse_tra(tra)
+    }
+  }
+  
+  if(sparse)
+  {
+    positions <- tra[[factor.dim+1]]
+    ids <- levels (positions)
+    
+    sample_depth <- sapply(ids, function(x){sum(positions==x)})
+    
+    if(factor.dim==1)
+    {
+      ordering <- sort(names(sample_depth))
+    }  else
+    {
+      ordering <- sort(as.numeric(names(sample_depth)))
+    }
+   
+    sample_depth <- sample_depth[sapply(ordering, as.character)]
+  } else 
+  {
+    filled_cells <- !is.na(tra)
+    
+    sample_depth <- apply(filled_cells, factor.dim, sum)
+  }
+  
+  return (sample_depth)
 }

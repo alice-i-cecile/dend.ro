@@ -62,16 +62,12 @@ stra <- sparse_tra(tra)
 tra2 <- unsparse_tra(stra)
 rwl2 <- tra.to.rwl(tra2)
 stra2 <- rwl.to.stra(rwl)
+tra3 <- unsparse_tra(stra2)
 
 # Performance
+system.time(rwl.to.tra(rwl))
 system.time(sparse_tra(rwl.to.tra(rwl)))
-system.time(rwl.to.stra(rwl, chunk_size=1))
-system.time(rwl.to.stra(rwl, chunk_size=2))
-system.time(rwl.to.stra(rwl, chunk_size=4))
-system.time(rwl.to.stra(rwl, chunk_size=8))
-system.time(rwl.to.stra(rwl, chunk_size=16))
-system.time(rwl.to.stra(rwl, chunk_size=32))
-system.time(rwl.to.stra(rwl, chunk_size=64))
+system.time(rwl.to.stra(rwl))
 
 # Sparse testing ####
 full_rcs <- standardize_tra(tra, sparse=F, method="rcs")

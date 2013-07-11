@@ -23,7 +23,6 @@ standardize_fes <- function (tra, incQ=T, incF=T, incA=T, multiplicative=T, corr
   tab.tra[!is.finite(tab.tra$G),"G"] <- NA
   
   # Construct formula for regression
-  
   if (model_type=="lm"){
     growth_formula <- as.formula(make_lm_formula(incQ, incF, incA))
   } else if (model_type=="gnm") {  

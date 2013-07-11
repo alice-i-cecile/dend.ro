@@ -1,4 +1,5 @@
 # Libraries ####
+library(mgcv)
 
 # Wrapper for standardizing tree ring data ####
 # tra: the tree-ring array data structure containing the data to be analysed
@@ -10,8 +11,8 @@
 
 standardize_tra <- function(tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="multiplicative", error="lnorm", method="sfs", sparse=TRUE, ...)
 {
-  # Exception handling
   
+  # Exception handling
   if (ifelse(is.data.frame(tra), sum(tra$G <= 0), sum(tra[tra<=0], na.rm=TRUE) > 0))
   {
     # Raise a warning if negative values found for multiplicative models
@@ -59,6 +60,10 @@ standardize_tra <- function(tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="mult
   {
     out <- standardize_rcs(tra, model, form, error, sparse, ...)
   }
+  else if(method == "gam")
+  {
+    out <- standardize_gam(tra, model, form, error, sparse, ...)
+  }  
   return (out)
 }
 
@@ -156,7 +161,7 @@ pad_effects <- function(effects, tra, form="multiplicative", sparse=TRUE)
         effect_names <- levels(tra[[tra_dim + 1]])
         if(i=="T" | i=="A")
         {
-          effect_names <- as.numeric(effect_names)
+          effect_names <- as.numeric(as.character(effect_names))
         }
         names(new_effects[[i]]) <- sort(effect_names)
       }
@@ -259,15 +264,52 @@ rescale_effects <- function (effects, form="multiplicative")
 # Model fit statistics ####
 
 # Compute all the relevant model fit statistics for fixed-effects standardization
-model_fit_tra <- function(effects, tra, model, form, error, sparse)
+model_fit_tra <- function(effects, tra, model, form, error, sparse, method="sfs", k=NA)
 {
+  
   fit <- list()
   
-  fit$predicted <- predicted_tra(effects, tra, form, sparse)
-  fit$residuals <- residuals_tra (tra, fit$predicted, error, sparse)
+  # Need to compute appropriate model fit stats for null models
+  if (sum(unlist(model))==0)
+  {
+    # Predictions of the null model are the null value
+    predicted <- tra
+    
+    if (sparse) 
+    {
+      if (form=="additive")
+      {
+        predicted$G <- 0
+      } else
+      {
+        predicted$G <- 1
+      }
+    } else 
+    {
+      if (form=="additive")
+      {
+        predicted[!is.na(predicted)] <- 0
+      } else
+      {
+        predicted[!is.na(predicted)] <- 1
+      }
+    }
+    
+    # Residuals of the null model are the observed data
+    residuals <- tra
+    
+  } else {
+    fit$predicted <- predicted_tra(effects, tra, form, sparse)
+    fit$residuals <- residuals_tra (tra, fit$predicted, error, sparse)
+  }
   
   fit$n <- n_tra(tra, sparse)
-  fit$k <- k_tra(tra, model, sparse)
+  if (method=="gam")
+  {
+    fit$k <- k
+  } else{
+    fit$k <- k_tra(tra, model, sparse)
+  }
   fit$sigma <- sigma_tra(fit$residuals, error, sparse)
   
   fit$tss <- tss_tra(tra, error, sparse)
@@ -386,7 +428,7 @@ k_tra <- function (tra, model, sparse)
 {
   if(sparse)
   {
-    # One parameter automatically for 
+    # One parameter automatically for estimate of error
     k <- 1
     
     # One parameter is estimated for each index of the effect vectors
@@ -406,7 +448,7 @@ k_tra <- function (tra, model, sparse)
     # Information about some parameters is lost due to rescaling (dummy variable trap)
     num_effects <- sum(unlist(model))
     
-    k <- k - (num_effects-1)
+    k <- ifelse (num_effects > 0, k - (num_effects-1), 0)
   }
   else
   {
@@ -430,7 +472,7 @@ k_tra <- function (tra, model, sparse)
     # Information about some parameters is lost due to rescaling (dummy variable trap)
     num_effects <- sum(unlist(model))
     
-    k <- k - (num_effects-1)
+    k <- ifelse (num_effects > 0, k - (num_effects-1), 0)
   }
   
   return(k)
@@ -658,7 +700,7 @@ standardize_rcs <- function(tra, model=list(I=FALSE, A=TRUE, T=TRUE), form="mult
   fit <- model_fit_tra (effects, tra, model, form, error, sparse)
     
   # Record model fitting settings
-  settings <- list(model=model, form=form, error=error, sparse=sparse)
+  settings <- list(model=model, form=form, error=error, sparse=sparse, method="rcs")
   
   out <- list(effects=effects, tra=tra, fit=fit, settings=settings)
   
@@ -770,6 +812,9 @@ standardize_sfs <-function (tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="mult
   effect_order <- order(c(effect_order[1], effect_order[2], miss.dim))
   effects <- effects[effect_order]
   
+  # Make sure effects are in the right order
+  effects <- sort_effects(effects, tra, sparse)
+  
   # Rescale the effects  to standard form
   effects <- rescale_effects(effects, form)
   
@@ -777,7 +822,7 @@ standardize_sfs <-function (tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="mult
   fit <- model_fit_tra (effects, tra, model, form, error, sparse)
   
   # Record model fitting settings
-  settings <- list(model=model, form=form, error=error, sparse=sparse)
+  settings <- list(model=model, form=form, error=error, sparse=sparse, method="old_sfs")
   
   out <- list(effects=effects, tra=tra, fit=fit, settings=settings)
   
@@ -789,6 +834,7 @@ standardize_sfs <-function (tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="mult
 
 standardize_tsfs <- function (tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="multiplicative", error="lnorm", sparse=TRUE, cor_threshold=0.999999)
 {
+  
   # Convert the tree-ring array to the appropriate form (sparse/full)
   if (sparse) 
   {
@@ -877,7 +923,7 @@ standardize_tsfs <- function (tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="mu
       }
     }
     
-    # Check for convergence. Use the log-correlation if the error term is suspected to be multiplicative lognormal
+    # Check for convergence. Use the log-correlation if the error term is suspected to be multiplicative lognormal    
     if (error=="norm"){
       if (sparse)
       {
@@ -900,7 +946,10 @@ standardize_tsfs <- function (tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="mu
     }
   
   }
-    
+  
+  # Make sure effects are in the right order
+  effects <- sort_effects(effects, tra, sparse)
+  
   # Rescale the effects to standard form
   effects <- rescale_effects(effects, form)
 
@@ -908,7 +957,7 @@ standardize_tsfs <- function (tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="mu
   fit <- model_fit_tra (effects, tra, model, form, error, sparse)
   
   # Record model fitting settings
-  settings <- list(model=model, form=form, error=error, sparse=sparse)
+  settings <- list(model=model, form=form, error=error, sparse=sparse, method="sfs")
   
   out <- list(effects=effects, tra=tra, fit=fit, settings=settings)
   
@@ -1024,9 +1073,183 @@ standardize_mle <- function(tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="mult
   fit <- model_fit_tra (effects, tra, model, form, error, sparse)
   
   # Record model fitting settings
-  settings <- list(model=model, form=form, error=error, sparse=sparse, ...)
+  settings <- list(model=model, form=form, error=error, sparse=sparse, method="likelihood", ...)
   
   out <- list(effects=effects, tra=tra, fit=fit, settings=settings)
   
   return(out)
 }
+
+# GAM fixed effects standardization ####
+
+# Main gam function
+standardize_gam <- function (tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="multiplicative", error="lnorm", sparse=TRUE, max_k=10, ...)
+{
+  # Confirm that form and error match, otherwise GAMs can't be used
+  if (
+    (form=="additive" & error=="lnorm")
+    |
+      (form=="multiplicative" & error=="norm")
+  )
+  {
+    simpleError("Model form and error distribution are an unrealistic match. Generalized additive models cannot be used for this configuration.")
+  }
+  
+  # Convert the tree-ring array to the appropriate form (sparse/full)
+  if (sparse) 
+  {
+    if (!is.data.frame(tra))
+    {
+      tra <- sparse_tra(tra)
+    }
+  } else
+  {
+    # Regression uses table form data
+    simpleError("GAM standardization can only handle sparse tree-ring arrays.")
+  }
+    
+  # Construct formula for regression
+  growth_formula <- as.formula(make_gam_formula(model))
+  
+  # max_k determines the maximum flexibility of the spline fitting the age effect
+  # Increased max_k greatly increases computation time
+  # Absolute maximum flexibility is:
+  # max_k <- nlevels(tra$a)
+  
+  print ("Model initialized.")
+  print (growth_formula)
+  
+  # If form is additive and error is additive and normal:
+  # Use GAM regression with a log-link
+  if (form == "additive")
+  {
+    family <- gaussian(link="identity")
+  }
+  
+  # If form is multiplicative and error is multiplicative log-normal:  
+  # Use GAM regression with a log-link
+  if (form == "multiplicative")
+  {
+    # Extremely slow, but more correct
+    #family <- Gamma(link="log")
+    # Log transformed response variable hack
+    # Breaks gam-estimated AIC
+    tra$G <- log(tra$G)
+    family <- gaussian(link="identity")
+  }
+  
+  # Estimate the growth model
+  growth_model <- gam (growth_formula, family=family, data=tra, ...)
+  print ("Generalized additive model used to standardize data.")
+  
+  # Extract estimates of the effect
+  # Correct way
+  #effects <- extract_effects_gam(growth_model, model, form, tra)
+  
+  # Log-transformation hack
+  effects <- extract_effects_gam(growth_model, model, form="additive", tra)
+  if (form=="multiplicative")
+  {
+    effects <- lapply(effects, exp)
+    tra$G <- exp(tra$G)
+  }
+  print ("Effects extracted.")
+  
+  # Fill in dummy values for effects not estimated
+  effects <- pad_effects(effects, tra, form, sparse)
+  
+  # Make sure effects are in the right order
+  effects <- sort_effects(effects, tra, sparse)
+  
+  # Rescale the effects to standard form
+  effects <- rescale_effects(effects, form)
+  
+  # Compute model fit statistics
+  # k, the number of parameters fit, must be gathered from the model fitting function
+  # k is ~= the effective degrees of freedom + 1
+  k <- sum(growth_model$edf) + 1
+  fit <- model_fit_tra (effects, tra, model, form, error, sparse, method="gam", k=k)
+  print("Fit computed.")
+  
+  # Record model fitting settings
+  settings <- list(model=model, form=form, error=error, sparse=sparse, method="gam", max_k=max_k, ...)
+  
+  out <- list(effects=effects, tra=tra, fit=fit, settings=settings)
+  
+  return (out)
+  
+}
+
+# Formula construction for GAM standardization
+make_gam_formula <- function (model){
+  dep.str <- "G"
+  ind.str <- "0"
+  
+  if(model$I){
+    ind.str <- paste(ind.str, "i", sep="+")
+  }
+  if(model$T){
+    ind.str <- paste(ind.str, "t", sep="+")
+  }
+  if(model$A){
+    # Change smoothing terms here
+    ind.str <- paste(ind.str, "s(as.numeric(as.character(a)), k=max_k)", sep="+")
+  }
+  
+  # Combine the two sides of the formula
+  formula.str <- paste(dep.str, ind.str, sep="~")
+  
+  return (formula.str)
+}
+
+# Extracting effects for gam models
+extract_effects_gam <- function(growth_model, model, form, tra)
+{
+  
+  # Extract coefficients for I and T directly
+  raw_effects <- growth_model$coefficients
+  
+  effects <- list()
+  effects$I <- raw_effects[substr(names(raw_effects), 1, 1)=="i"]
+  effects$T <- raw_effects[substr(names(raw_effects), 1, 1)=="t"]
+
+  names(effects$I) <- substr(names(effects$I), 2, length(names(effects$I)))
+  names(effects$T) <- substr(names(effects$T), 2, length(names(effects$T)))
+  
+  # Find A by process of elimination
+  # Generate predicted values
+  dummy_data <- data.frame(i=levels(tra$i)[2], t=levels(tra$t)[2], a=levels(tra$a))
+  predicted_by_age <- predict(growth_model, dummy_data)
+  
+  # Remove the known effects of time and individuals
+  if (form=="additive")
+  {
+    base_line <- 0
+    if (model$I)
+    {
+      base_line <- base_line + effects$I[which(names(effects$I)==levels(tra$i)[2])]
+    }
+    if (model$T)
+    {
+      base_line <- base_line + effects$T[which(names(effects$T)==levels(tra$t)[2])]
+    }
+    effects$A <- predicted_by_age - base_line
+  } else 
+  {
+    base_line <- 1
+    if (model$I)
+    {
+      base_line <- base_line * effects$I[which(names(effects$I)==levels(tra$i)[2])]
+    }
+    if (model$T)
+    {
+      base_line <- base_line * effects$T[which(names(effects$T)==levels(tra$t)[2])]
+    }
+    effects$A <- predicted_by_age / base_line
+  }
+  
+  names(effects$A) <- levels(tra$a)
+  
+  return(effects)
+}
+
