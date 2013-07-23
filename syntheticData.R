@@ -123,7 +123,6 @@ base_synth_TRA <- function (cv_Q, cv_F, cv_A, births, deaths, noiseSD=0, multipl
 }
 
 # Basic realistic parameterization and construction for a modern data set
-
 modern_TRA <- function (nQ, nF, sdF, funcA, noiseSD=0, multiplicative=TRUE, GSS, ...){
   # Assumes:
   # constant birth rate
@@ -159,7 +158,7 @@ modern_TRA <- function (nQ, nF, sdF, funcA, noiseSD=0, multiplicative=TRUE, GSS,
   cv <- list("Q"=cv_Q, "F"=cv_F, "A"=cv_A)
   
   # Rescale CVs
-  cv <- rescaleCV(cv)
+  cv <- rescale_effects(cv)
   
   # Compile output
   out <- list(tra=tra, cv=cv)

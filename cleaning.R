@@ -26,3 +26,29 @@ full_data_files$valid <- valid
 
 # Save list of data sets with flags
 write.csv(full_data_files, file="./Meta-analysis/Results/data_files.csv")
+
+# Clean and pick an order ####
+full_data_files <- read.csv("./Meta-analysis/Results/data_files.csv")
+
+# Set RNG seed and number of chronoologies to analyse
+# Ensure consistent RNG
+set.seed(seed=42)
+
+# Only select valid data sets
+data_files <- full_data_files[full_data_files$valid==TRUE, ]
+# Find a predetermined random order for the files
+data_files <- data_files[sample(1:nrow(data_files)), ]
+data_files$order <- 1:nrow(data_files)
+write.csv(data_files, file="./Meta-analysis/Results/ordered_data_files.csv")
+
+# Load from file
+data_files <- read.csv(file="./Meta-analysis/Results/ordered_data_files.csv")
+
+# Some data sets are too large for GAM (mgcv) to handle!
+# Record and skip them
+data_files$size_ok <- TRUE
+data_files$size_ok[47] <- FALSE
+data_files$size_ok[2085] <- FALSE
+data_files$valid[2185] <- FALSE
+
+write.csv(data_files, file="./Meta-analysis/Results/ordered_data_files.csv")

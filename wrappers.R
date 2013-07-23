@@ -12,8 +12,7 @@ library (plyr)
 library (rjson)
 
 source ("coreTRA.R")
-source ("RCS.R")
-source ("FES.R")
+source ("standardization.R")
 source ("GSS.R")
 source ("syntheticData.R")
 

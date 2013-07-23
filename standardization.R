@@ -1,5 +1,6 @@
 # Libraries ####
 library(mgcv)
+source("demons.R")
 
 # Wrapper for standardizing tree ring data ####
 # tra: the tree-ring array data structure containing the data to be analysed
@@ -9,7 +10,7 @@ library(mgcv)
 # method: which algorithm should we use to standardize the data?
 # sparse: use sparse list representation of data to reduce memory overhead
 
-standardize_tra <- function(tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="multiplicative", error="lnorm", method="sfs", sparse=TRUE, ...)
+standardize_tra <- function(tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="multiplicative", error="lnorm", method="sfs", sparse=TRUE, post_hoc=TRUE, ...)
 {
   
   # Exception handling
@@ -37,12 +38,8 @@ standardize_tra <- function(tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="mult
   {
     warning("Model form and error distribution are an unrealistic match. Be sure to check the model residuals. Model fitting problems may arise.")
   }
-  
-  if (sum(unlist(model))==3 & method != "gam")
-  {
-    warning("Three categorical effect model selected. Parameter estimates will be unreliable.")
-  }
 
+ 
   if (method=="likelihood")
   {
     out <- standardize_likelihood(tra, model, form, error, sparse, ...)
@@ -63,7 +60,21 @@ standardize_tra <- function(tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="mult
   else if(method == "gam")
   {
     out <- standardize_gam(tra, model, form, error, sparse, ...)
-  }  
+  }
+  
+  # Check for 3 effect model
+  if (sum(unlist(model))==3)
+  {
+    if (post_hoc)
+    {
+      out$effects <- post_hoc_intercession(out$effects, out$tra, sparse, form)
+      warning("Three effect model selected. Post-hoc selection was used to stabilize parameter estimates.")
+    } else {
+      warning("Three effect model selected. Parameter estimates are wildly unreliable. Consider using post-hoc selection.")
+    }
+  }
+  
+  
   return (out)
 }
 
@@ -152,8 +163,21 @@ pad_effects <- function(effects, tra, form="multiplicative", sparse=TRUE)
   {
     # Fill empty values  
     for(i in c("I", "T", "A")){
+      
+      j <- c(I="i", T="t", A="a")[i]
+      
       if (length(effects[[i]] > 0)){
         new_effects[[i]] <-  effects[[i]]
+        
+        # Fill in dummy levels
+        if(length(effects[[i]]) < nlevels(tra[[j]]))
+        {
+          missing_names <- levels(tra[[j]])[!(levels(tra[[j]]) %in% names(effects[[i]]))]
+          missing_effects <- rep(na.value, times=length(missing_names))
+          names (missing_effects) <- missing_names
+          new_effects[[i]] <- c(effects[[i]], missing_effects)
+        }
+        
       } else {
         tra_dim <- which(c("I", "T", "A")==i)
         
@@ -171,8 +195,20 @@ pad_effects <- function(effects, tra, form="multiplicative", sparse=TRUE)
   {
     # Fill empty values  
     for(i in c("I", "T", "A")){
+      
+      j <- c(I=1, T=2, A=3)[i]
+      
       if (length(effects[[i]] > 0)){
         new_effects[[i]] <-  effects[[i]]
+        
+        # Fill in dummy levels
+        if(length(effects[[i]]) < dim(tra)[j])
+        {
+          missing_names <- dimnames(tra)[[j]][!(dimnames(tra)[[j]] %in% names(effects[[i]]))]
+          missing_effects <- rep(na.value, times=length(missing_names))
+          names (missing_effects) <- missing_names
+          new_effects[[i]] <- c(effects[[i]], missing_effects)
+        }
       } else {
         tra_dim <- which(c("I", "T", "A")==i)
         
@@ -1093,7 +1129,7 @@ standardize_mle <- function(tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="mult
 # GAM fixed effects standardization ####
 
 # Main gam function
-standardize_gam <- function (tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="multiplicative", error="lnorm", sparse=TRUE, max_k=10, ...)
+standardize_gam <- function (tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="multiplicative", error="lnorm", sparse=TRUE, age_k=10, ...)
 {
   # Confirm that form and error match, otherwise GAMs can't be used
   if (
@@ -1182,7 +1218,7 @@ standardize_gam <- function (tra, model=list(I=FALSE, T=TRUE, A=TRUE), form="mul
   print("Fit computed.")
   
   # Record model fitting settings
-  settings <- list(model=model, form=form, error=error, sparse=sparse, method="gam", max_k=max_k, ...)
+  settings <- list(model=model, form=form, error=error, sparse=sparse, method="gam", ...) #max_k=max_k, ...)
   
   out <- list(effects=effects, tra=tra, fit=fit, settings=settings)
   
@@ -1203,7 +1239,7 @@ make_gam_formula <- function (model){
   }
   if(model$A){
     # Change smoothing terms here
-    ind.str <- paste(ind.str, "s(as.numeric(as.character(a)), k=max_k)", sep="+")
+    ind.str <- paste(ind.str, "s(as.numeric(as.character(a)), k=age_k, ...)", sep="+")
   }
   
   # Combine the two sides of the formula
