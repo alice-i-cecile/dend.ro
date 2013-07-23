@@ -38,9 +38,25 @@ load_rwl <- function (stamp=0,fname, ...){
 }
 
 # Create synthetic data ####
-synthetic_tra <- function (stamp=0,method, ...){
+synthetic_tra <- function (stamp=0, method, retentionFraction=1, noiseSD=0, ...){
   if (method=="crude"){
-    out <- crude_synth_TRA (...)
+    
+    # Grab the effects from a modern TRA equivalent
+    dummy_out <- modern_TRA(...)
+    
+    effects <- dummy_out$effects
+    
+    # Rebuild the full TRA
+    tra <- effects$I %o% effects$T %o% effects$A
+    
+    # Keep points at random
+    keep <- sample(length(tra), retentionFraction*length(tra))
+    tra[!keep] <- NA
+    
+    # Add noise
+    tra <- add_noise (tra, noiseSD, multiplicative)
+    
+    out <- list(tra=tra, cv=effects)
     
   } else if (method=="modern"){
     out <- modern_TRA(...)
