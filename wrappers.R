@@ -15,6 +15,7 @@ source ("coreTRA.R")
 source ("standardization.R")
 source ("GSS.R")
 source ("syntheticData.R")
+source ("demons.R")
 
 # Load data from hardrive in .rwl, output it as a TRA ####
 load_rwl <- function (stamp=0,fname, ...){
