@@ -21,6 +21,7 @@ load_rwl <- function (stamp=0,fname, ...){
   rwl <- read.rwl(fname, ...)
   
   tra <- rwl.to.tra(rwl)
+  tra[tra<=0] <- NA
   
   sdQ <- sample_depth_tra(tra,1)
   sdF <- sample_depth_tra(tra,2)
