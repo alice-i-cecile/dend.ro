@@ -1,7 +1,6 @@
 # Load dependencies ####
-
 library (stringr)
-library (dplR)	
+library (dplR)  
 library (MASS)
 library (reshape)
 library (car)
@@ -39,9 +38,8 @@ load_rwl <- function (stamp=0,fname, ...){
 }
 
 # Create synthetic data ####
-synthetic_tra <- function (stamp=0, method, retentionFraction=1, noiseSD=0, ...){
+synthetic_tra <- function (stamp=0,method, retentionFraction=1, noiseSD=0, ...){
   if (method=="crude"){
-    
     # Grab the effects from a modern TRA equivalent
     dummy_out <- modern_TRA(...)
     
@@ -78,21 +76,13 @@ synthetic_tra <- function (stamp=0, method, retentionFraction=1, noiseSD=0, ...)
 }
 
 # Standardize your tree ring data ####
-standardize_tra <- function (dstamp, stamp, method, ...){
+standardize <- function (dstamp, stamp, ...){
   fname = paste('data/Rdata',dstamp,'.dat',sep='')
   load(fname)
   tra <- out$tra
-  if (method=="RCS"){
-    out <- standardize_rcs(tra, ...)
-  } else if (method=="SFS"){
-    out <- standardize_sfs(tra, ...)#ignore
-  } else if (method=="TSFS"){
-    out <- standardize_tsfs(tra, ...)
-  } else if (method=="FES"){
-    out <- standardize_fes(tra, ...)
-    out$model <- NULL
-  }
+  out <- standardize_tra(tra, ...)
   nstamp = paste(dstamp,'_',stamp,sep='')
+  out$stamp = nstamp
   JSONfname = paste("data/JSONanalysis",dstamp,"_",stamp,".dat",sep='')
   write_JSON_data(JSONfname,out)
   return (out)
@@ -105,4 +95,3 @@ write_JSON_data <- function(fname, out) {
   close(fileConn)
   return (0)
 }
-
