@@ -160,7 +160,6 @@ rwl.to.tra <- function (rwl, birth_years=NULL){
 # Convert a tree ring array back to a standard tree ring data frame
 tra.to.rwl <- function (tra) {
   
-  
   # Get dimension sizes
   i.size <- dim (tra)[1]
   t.size <- dim (tra)[2]
@@ -172,12 +171,11 @@ tra.to.rwl <- function (tra) {
   rownames(rwl) <- dimnames(tra)[[2]]
   
   # Fill data
-  for (tree in 1:dim(tra)[1]){
+  for (tree in 1:i.size){
     
     # Get lifespan to fill. Could be more general in style
     filled <- !is.na(tra[tree, ,])
     filledYears <- rownames(filled[rowSums(filled)>0,])
-    names(filledYears) <- dimnames(tra)[[1]]
     
     # Extract data
     data <- tra[tree,,]
