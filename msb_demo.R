@@ -137,7 +137,7 @@ rep("ISS-Spline", length(T_iss))
 ratio_df$model <- factor(x=ratio_df$model, levels=c("ISS-Spline","SFS-RCS","FES"))
 
                          
-ggplot(ratio_df, aes(x=t, y=T_cv)) + geom_line() + facet_grid(model~.) + ylim (c(0,2)) + theme_bw() + xlab("Year") + ylab("Ratio between reconstructed and true time effect") + geom_vline(x=1700)
+ggplot(ratio_df, aes(x=t, y=T_cv)) + geom_line() + facet_grid(model~.) + ylim (c(0,2)) + theme_bw() + xlab("Year") + ylab("Ratio between reconstructed and true time effect") + geom_vline(x=1700) + geom_hline(y=1)
 
 # Saving ####
 write.csv(demo, file="./Examples/synthetic/demo_chron.csv")
