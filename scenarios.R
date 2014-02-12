@@ -18,7 +18,6 @@ effects_2 <- scen_2$cv
 names(effects_2) <- c("I", "T", "A")
 names(effects_2$I) <- dimnames(tra_2)[[1]]
 
-
 # Standardize
 ta_2 <- standardize_tra(tra_2, model=list(I=FALSE, T=TRUE, A=TRUE), method="sfs")
 ita_2 <- standardize_tra(tra_2, model=list(I=TRUE, T=TRUE, A=TRUE), method="sfs")

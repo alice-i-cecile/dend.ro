@@ -100,8 +100,7 @@ base_synth_TRA <- function (cv_Q, cv_F, cv_A, births, deaths, noiseSD=0, multipl
         
     # Set all values outside of living years to NA
     # Living years have a base value of 1
-    rwl[!living_years, i] <- NA    
-    
+    rwl[!living_years, i] <- NA      
   }
     
   # Convert to a TRA
