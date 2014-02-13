@@ -192,6 +192,8 @@ for (i in 1:length(yamal_effects_list))
   yamal_effects <- rbind(yamal_effects, effects_i)
 }
 
+yamal_effects$model <- factor(yamal_effects$model, labels=c("RCS", "ITA", "TA"))
+
 # Save effects
 write.csv(yamal_effects, file="./Examples/yam/yml_effects.csv")
 
@@ -220,7 +222,7 @@ match_birth_year <- function(r){
 
 I_year_df$birth_year <- sapply(1:nrow(I_year_df), match_birth_year)
 
-yamal_I_birth_plot <- ggplot(I_year_df, aes(x=birth_year, y=effect, colour=model)) + geom_point() + geom_smooth()
+yamal_I_birth_plot <- ggplot(I_year_df, aes(x=birth_year, y=effect)) + geom_point() + geom_smooth(colour="red") + ylab("Individual effect") + xlab("Year of birth") + theme_bw()
 print(yamal_I_birth_plot)
 
 # Correlation test for MSB
@@ -232,38 +234,38 @@ save(yamal_I_birth_trend, file="./Examples/yam/yml_I_birth_trend.RData")
 T_effects <- yamal_effects[yamal_effects$type=="T",]
 T_effects$id <- as.numeric(as.character(T_effects$id))
 
-yamal_T_plot <- ggplot(T_effects, aes(y=effect, x=id, colour=model)) + geom_line() + facet_grid(model~.) + theme_bw()
+yamal_T_plot <- ggplot(T_effects[T_effects$model!="RCS",], aes(y=effect, x=id, colour=model)) + geom_line() + theme_bw() + geom_hline(y=1) + ylab("Time effect") + xlab("Year") + theme_bw() + scale_colour_manual(values=c("black", "red"), name="Model")
 print(yamal_T_plot)
 
 # Plot MSB distortion and SFS effects
-yamal_rcs <- T_effects[T_effects$model=="rcs", ]
+yamal_rcs <- T_effects[T_effects$model=="RCS", ]
 yamal_rcs <- yamal_rcs[order(yamal_rcs$id),]
 
-yamal_sfs_ta <- T_effects[T_effects$model=="sfs_ta", ]
+yamal_sfs_ta <- T_effects[T_effects$model=="TA", ]
 yamal_sfs_ta <- yamal_sfs_ta[order(yamal_sfs_ta$id),]
 
-yamal_sfs_ita <- T_effects[T_effects$model=="sfs_ita", ]
+yamal_sfs_ita <- T_effects[T_effects$model=="ITA", ]
 yamal_sfs_ita <- yamal_sfs_ita[order(yamal_sfs_ita$id),]
 
 yamal_sfs_effect <- yamal_rcs
-yamal_sfs_effect$effect <- yamal_sfs_ta$effect / yamal_rcs$effect
+yamal_sfs_effect$effect <- yamal_rcs$effect / yamal_sfs_ta$effect
 
-yamal_msb_effect <- yamal_rcs
-yamal_msb_effect$effect <- yamal_sfs_ita$effect / yamal_sfs_ta$effect
+yamal_msb_effect <- yamal_sfs_ta
+yamal_msb_effect$effect <- yamal_sfs_ta$effect / yamal_sfs_ita$effect
 
 write.csv(yamal_sfs_effect, file="./Examples/yam/yamal_sfs_effect.csv")
 write.csv(yamal_msb_effect, file="./Examples/yam/yamal_msb_effect.csv")
 
 
-yamal_sfs_effect_plot <- ggplot(yamal_sfs_effect, aes(y=effect, x=id)) + geom_line() + geom_hline(y=1)
+yamal_sfs_effect_plot <- ggplot(yamal_sfs_effect, aes(y=effect, x=id)) + geom_line() + geom_hline(y=1) + geom_hline(y=1) + ylab("Ratio between uncorrected and corrected time effect (SFS)") + xlab("Year") + theme_bw()
 print(yamal_sfs_effect_plot)
 
-yamal_msb_effect_plot <- ggplot(yamal_msb_effect, aes(y=effect, x=id)) + geom_line() + geom_hline(y=1)
+yamal_msb_effect_plot <- ggplot(yamal_msb_effect, aes(y=effect, x=id)) + geom_line() + geom_hline(y=1) + ylab("Ratio between uncorrected and corrected time effect") + xlab("Year") + theme_bw()
 print(yamal_msb_effect_plot)
 
 # Plot A
 A_effects <- yamal_effects[yamal_effects$type=="A",]
 A_effects$id <- as.numeric(as.character(A_effects$id))
 
-yamal_A_plot <- ggplot(A_effects, aes(y=effect, x=id, colour=model)) + geom_line() + facet_grid(model~.) + theme_bw()
+yamal_A_plot <- ggplot(A_effects, aes(y=effect, x=id, colour=model)) + geom_line() + facet_grid(model~.) + theme_bw() + ylab("Age effect") + xlab("Age (years)") + theme_bw()
 print(yamal_A_plot)
