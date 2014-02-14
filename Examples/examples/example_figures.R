@@ -14,7 +14,6 @@ torn_trw <- read.rwl(torn_trw_path)
 yamal_po <- read.csv("./Examples/yam/yml_po.csv")
 torn_po <- read.csv("./Examples/torn/torn_po.csv")
 
-
 # Splitting nicely
 yamal_I <- yamal_effects[yamal_effects$type=="I" & (yamal_effects$model=="ITA" | yamal_effects$model=="TA"),]
 yamal_T <-  yamal_effects[yamal_effects$type=="T" & (yamal_effects$model=="ITA" | yamal_effects$model=="TA"),]
