@@ -47,6 +47,7 @@ yamal_po <- as.data.frame(t(sapply(yamal_po_words, fill_short_lines)))
 names(yamal_po) <- c("ID", "BirthYear", "PO", "Unknown1", "Unknown2", "Unknown3", "Unknown4")
 
 yamal_po$PO <- as.numeric(as.character(yamal_po$PO))
+write.csv(yamal_po, file="./Examples/yam/yml_po.csv")
 
 # Pre-processing ####
 
