@@ -70,7 +70,6 @@ yamal_I_year_df$Chronology <- "Yamal"
 torn_I_year_df$Chronology <- "Tornetrask"
 I_year_df <- rbind(yamal_I_year_df, torn_I_year_df)
 
-
 I_birth_plot <- ggplot(I_year_df, aes(x=birth_year, y=effect)) + geom_point() + geom_smooth(colour="red") + ylab("Individual effect") + xlab("Year of birth") + theme_bw() + facet_grid(Chronology~.)
 print(yamal_I_birth_plot)
 
@@ -82,7 +81,7 @@ yamal_T$Chronology <- "Yamal"
 torn_T$Chronology <- "Tornetrask"
 
 joint_T <- rbind(yamal_T, torn_T)
-T_plot <- ggplot(joint_T, aes(y=effect, x=id, colour=model)) + geom_line() + theme_bw() + geom_hline(y=1) + ylab("Time effect") + xlab("Year") + theme_bw() + scale_colour_manual(values=c("black", "red"), name="Model") + facet_grid(Chronology~.) + ylim (c(0, 3))
+T_plot <- ggplot(joint_T, aes(y=effect, x=id, colour=model)) + geom_line(alpha=0.5) + theme_bw() + geom_hline(y=1) + ylab("Time effect") + xlab("Year") + theme_bw() + scale_colour_manual(values=c("black", "red"), guide="none") + facet_grid(Chronology~.) + ylim (c(0, 3))
 print(T_plot) 
 
 # Plot MSB effect ####
