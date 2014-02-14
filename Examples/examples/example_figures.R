@@ -70,8 +70,8 @@ yamal_I_year_df$Chronology <- "Yamal"
 torn_I_year_df$Chronology <- "Tornetrask"
 I_year_df <- rbind(yamal_I_year_df, torn_I_year_df)
 
-I_birth_plot <- ggplot(I_year_df, aes(x=birth_year, y=effect)) + geom_point() + geom_smooth(colour="red") + ylab("Individual effect") + xlab("Year of birth") + theme_bw() + facet_grid(Chronology~.)
-print(yamal_I_birth_plot)
+I_birth_plot <- ggplot(I_year_df, aes(x=birth_year, y=effect)) + geom_point() + geom_smooth(colour="red") + ylab("Individual effect") + xlab("Year of birth") + theme_bw() + facet_grid(Chronology~.) + geom_hline(y=1)
+print(I_birth_plot)
 
 # Plot time signals ####
 yamal_T$id <- as.numeric(as.character(yamal_T$id))
