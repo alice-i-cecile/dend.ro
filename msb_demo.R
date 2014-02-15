@@ -124,7 +124,7 @@ T_df$model <- factor(x=T_df$model, levels=c("ISS-Spline","SFS-RCS","FES"))
                          
 true_T <- data.frame(T_cv=synth_T [(2001-length(T_fes)):2000], t=as.numeric(as.character(names(T_sfs))))
 
-ggplot(T_df, aes(x=t, y=T_cv)) + geom_line(alpha=0.5, colour="red") + facet_grid(model~.) + ylim (c(0,2)) + geom_line(data=true_T, colour="black", alpha=0.5) + theme_bw() + xlab("Year") + ylab("Time effect") + geom_vline(x=1700)
+ggplot(T_df, aes(x=t, y=T_cv)) + geom_line(alpha=0.5, colour="red") + facet_grid(model~.) + ylim (c(0,2)) + geom_line(data=true_T, colour="black", alpha=0.5) + theme_bw() + xlab("Year") + ylab("Time effect") + geom_vline(x=1700) + geom_hline(y=1)
                          
 # Ratio between true and reconstruction
                          

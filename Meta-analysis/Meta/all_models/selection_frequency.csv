@@ -1,0 +1,17 @@
+"","model","form","error","I","T","A","sigma_choice","Rsq_choice","adj.Rsq_choice","llh_choice","AIC_choice","AICc_choice","BIC_choice"
+"1",1,"additive","norm",TRUE,TRUE,TRUE,0,0.6138147566719,0.41287284144427,0,0,0,0
+"2",2,"multiplicative","lnorm",TRUE,TRUE,TRUE,1,0.3861852433281,0.295133437990581,1,0.240188383045526,0.131868131868132,0
+"3",3,"additive","norm",FALSE,TRUE,TRUE,0,0,0,0,0,0,0
+"4",4,"multiplicative","lnorm",FALSE,TRUE,TRUE,0,0,0,0,0,0,0
+"5",5,"additive","norm",TRUE,FALSE,TRUE,0,0,0.00156985871271586,0,0,0,0
+"6",6,"multiplicative","lnorm",TRUE,FALSE,TRUE,0,0,0,0,0,0,0.00941915227629513
+"7",7,"additive","norm",FALSE,FALSE,TRUE,0,0,0,0,0,0,0
+"8",8,"multiplicative","lnorm",FALSE,FALSE,TRUE,0,0,0,0,0,0,0
+"9",9,"additive","norm",TRUE,TRUE,FALSE,0,0,0.202511773940345,0,0,0,0
+"10",10,"multiplicative","lnorm",TRUE,TRUE,FALSE,0,0,0.0863422291993721,0,0.73469387755102,0.832025117739403,0.483516483516484
+"11",11,"additive","norm",FALSE,TRUE,FALSE,0,0,0,0,0,0,0
+"12",12,"multiplicative","lnorm",FALSE,TRUE,FALSE,0,0,0,0,0,0,0.00156985871271586
+"13",13,"additive","norm",TRUE,FALSE,FALSE,0,0,0.00156985871271586,0,0,0,0
+"14",14,"multiplicative","lnorm",TRUE,FALSE,FALSE,0,0,0,0,0.0251177394034537,0.0361067503924647,0.505494505494505
+"15",15,"additive","norm",FALSE,FALSE,FALSE,0,0,0,0,0,0,0
+"16",16,"multiplicative","lnorm",FALSE,FALSE,FALSE,0,0,0,0,0,0,0

@@ -1,0 +1,3 @@
+"","form","error","I","T","A","sigma","Rsq","adj.Rsq","dAIC","dAICc","dBIC","wAIC","wAICc","wBIC"
+"1","multiplicative","lnorm",FALSE,TRUE,TRUE,0.190114574520577,0.14894433823872,0.16205862272991,NA,NA,NA,NA,NA,NA
+"2","multiplicative","lnorm",TRUE,TRUE,TRUE,NA,NA,NA,NA,NA,NA,NA,NA,NA
