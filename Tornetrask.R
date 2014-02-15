@@ -36,6 +36,7 @@ torn_po <- as.data.frame(t(apply(torn_po_raw, MARGIN=1, split_line)))
 names(torn_po) <- c("ID", "BirthYear", "PO")
 
 torn_po$PO <- as.numeric(as.character(torn_po$PO))
+write.csv(torn_po, file="./Examples/torn/torn_po.csv")
 
 # Pre-processing ####
 
